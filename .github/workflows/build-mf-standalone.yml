@@ -84,7 +84,7 @@ jobs:
               js.insert(i,"local_unlock.js")
               js.insert(i+1,"local_full.js")
               cs["js"]=js
-          d["version"]="9.3.3.15"
+          d["version"]="9.3.3.16"
           d["description"]="賽馬熱錢流聰明投注系統 - 本機計算版"
           m.write_text(json.dumps(d,ensure_ascii=False,indent=4)+"\n","utf-8")
           PY
