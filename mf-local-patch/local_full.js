@@ -57,45 +57,64 @@ function ensureSmartButton(){
 }
 function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&&e.id.match(/raceno_(\d+)/);if(m)return+m[1];m=location.pathname.match(/\/(\d+)(?:\/?$|\?)/);return m?+m[1]:1}
 var __mfLocalPoolHint='';
+function poolFromText(v){
+  v=String(v||'').replace(/\s+/g,'').trim();
+  if(v==='位置Q')return'qp';
+  if(v==='連贏')return'q';
+  if(v==='連贏+位置Q'||v==='連贏＋位置Q')return'qqp';
+  if(v==='單膽二重彩')return'fctb';
+  if(v==='複膽二重彩')return'fctbm';
+  if(v==='孖寶')return'dbl';
+  if(v==='獨贏')return'w';
+  if(v==='位置')return'p';
+  if(v==='獨贏+位置'||v==='獨贏＋位置')return'wp';
+  return'';
+}
 document.addEventListener('click',function(e){
-  var t=e.target&&e.target.closest&&e.target.closest('#mf007_betQin,#mf007_betQpl,#mf007_betQQP,#mf007_betFctB,#mf007_betFctBM,#mf007_betDbl,#mf007_betWin,#mf007_betPla,#mf007_betWP');
+  var t=e.target&&e.target.closest&&e.target.closest('a,button,input,div,td');
   if(!t)return;
-  var m={
-    mf007_betQin:'q',
-    mf007_betQpl:'qp',
-    mf007_betQQP:'qqp',
-    mf007_betFctB:'fctb',
-    mf007_betFctBM:'fctbm',
-    mf007_betDbl:'dbl',
-    mf007_betWin:'w',
-    mf007_betPla:'p',
-    mf007_betWP:'wp'
+  var byId={
+    mf007_betQin:'q',mf007_betQpl:'qp',mf007_betQQP:'qqp',
+    mf007_betFctB:'fctb',mf007_betFctBM:'fctbm',mf007_betDbl:'dbl',
+    mf007_betWin:'w',mf007_betPla:'p',mf007_betWP:'wp'
   };
-  if(m[t.id])__mfLocalPoolHint=m[t.id];
+  var p=byId[t.id]||poolFromText(t.value||text(t));
+  if(p)__mfLocalPoolHint=p;
 },true);
 
+function activePoolFromUi(){
+  var cand=$qa('#mf007_dataArea .mf007_btnOn,#mf007_dataArea .mf007_qtb.mf007_btnOn,#mf007_dataArea .mf007_tb.mf007_btnOn,.mf007_btnOn,.mf007_qtb.mf007_btnOn,.mf007_tb.mf007_btnOn');
+  var order=['qp','fctbm','fctb','dbl','qqp','q','wp','p','w'];
+  var found={};
+  cand.forEach(function(e){
+    if(!e.getClientRects().length)return;
+    var p=poolFromText(e.value||text(e));
+    if(p)found[p]=true;
+    var id=e.id||'';
+    if(id==='mf007_betQpl')found.qp=true;
+    else if(id==='mf007_betQin')found.q=true;
+    else if(id==='mf007_betFctB')found.fctb=true;
+    else if(id==='mf007_betFctBM')found.fctbm=true;
+    else if(id==='mf007_betDbl')found.dbl=true;
+  });
+  for(var i=0;i<order.length;i++)if(found[order[i]])return order[i];
+  return'';
+}
+
 function pool(){
-  var path=String(location.pathname||'').toLowerCase(),e;
+  var path=String(location.pathname||'').toLowerCase();
   if(/\/dbl\//.test(path))return'dbl';
   if(/\/fct\//.test(path)){
     if(__mfLocalPoolHint==='fctbm')return'fctbm';
     return'fctb';
   }
+
+  // The user's last actual click is authoritative.
   if(__mfLocalPoolHint)return __mfLocalPoolHint;
 
-  // Prefer the two Q-family buttons explicitly; QPL must not fall through to QIN.
-  e=$q('#mf007_betQpl');
-  if(e&&e.classList.contains('mf007_btnOn'))return'qp';
-  e=$q('#mf007_betQin');
-  if(e&&e.classList.contains('mf007_btnOn'))return'q';
-
-  var a=[['#mf007_betFctBM','fctbm'],['#mf007_betFctB','fctb'],['#mf007_betDbl','dbl'],['#mf007_betQQP','qqp'],['#mf007_betWP','wp'],['#mf007_betPla','p'],['#mf007_betWin','w']];
-  for(var i=0;i<a.length;i++){
-    e=$q(a[i][0]);
-    if(e&&e.classList.contains('mf007_btnOn'))return a[i][1];
-  }
-  e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];
-  if(e&&e.getAttribute('rel'))return e.getAttribute('rel');
+  // Otherwise inspect the currently highlighted original MF button.
+  var ui=activePoolFromUi();
+  if(ui)return ui;
   return'q';
 }
 function runnerNo(e){
@@ -570,13 +589,18 @@ function officialDblMap(raceNo){
   return map;
 }
 function odds(p,r,cc){
-  var officialMap=null,visibleFct=null;
-  if(p==='q')officialMap=officialPairMap('QIN',r);
-  else if(p==='qp')officialMap=officialPairMap('QPL',r);
-  else if(p==='dbl')officialMap=officialDblMap(r);
-  else if(p==='fctb'||p==='fctbm'){
-    officialMap=officialFctMap(r);
+  var officialMap=null,visibleMap=null,visibleFct=null;
+  if(p==='q'){
+    visibleMap=visiblePairMap('QIN');
+    officialMap=officialPairMap('QIN',r);
+  }else if(p==='qp'){
+    visibleMap=visiblePairMap('QPL');
+    officialMap=officialPairMap('QPL',r);
+  }else if(p==='dbl'){
+    officialMap=officialDblMap(r);
+  }else if(p==='fctb'||p==='fctbm'){
     visibleFct=visibleFctMap();
+    officialMap=officialFctMap(r);
   }
 
   return cc.map(function(c){
@@ -584,21 +608,24 @@ function odds(p,r,cc){
     var key=c.h.length===2?(isOrdered?(c.h[0]+'-'+c.h[1]):(Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]))):'';
     var o=NaN;
 
-    if(p==='dbl'){
+    if(p==='q'){
+      if(visibleMap&&key)o=visibleMap.get(key);
+      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
+      if(!(o>1))o=direct('q',r,c);
+    }else if(p==='qp'){
+      // Strict QPL isolation: never use QIN.
+      if(visibleMap&&key)o=visibleMap.get(key);
+      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
+      // No generic Q fallback here. Missing QPL stays missing.
+    }else if(p==='dbl'){
       if(officialMap&&key)o=officialMap.get(key);
       if(!(o>1))o=direct('dbl',r,c);
     }else if(p==='fctb'||p==='fctbm'){
-      // FCT is ordered: first horse -> second horse.
-      // Prefer the exact FCT matrix currently visible on HKJC.
       if(visibleFct&&key)o=visibleFct.get(key);
       if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
-    }else if(p==='qp'){
-      // QPL must never borrow QIN. Prefer the captured QPL pool first.
-      if(officialMap&&key)o=officialMap.get(key);
-      if(!(o>1))o=direct('qp',r,c);
+      // FCT also stays isolated; never substitute Q/QPL.
     }else{
       o=direct(p,r,c);
-      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
     }
 
     c.o=o;
@@ -645,7 +672,7 @@ function show(p,b,c){
   var rows=c.rows.map(function(x){return '<tr><td>'+x.h.join(' > ')+'</td><td>'+x.o.toFixed(2)+'</td><td>$'+x.stake+'</td><td>$'+x.pay.toFixed(0)+'</td></tr>'}).join('');
   var C=addClass(p),R=c.rows.map(function(x){return rel(p,x)}).filter(Boolean).join('@@');
   var avg=c.rows.reduce(function(sum,x){return sum+x.pay},0)/c.rows.length;
-  h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：$'+b+'　實際：$'+c.used+'（最多 +15%）　平均預計派彩：約 $'+avg.toFixed(0)+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';
+  h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算 ['+String(p).toUpperCase()+']</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：$'+b+'　實際：$'+c.used+'（最多 +15%）　平均預計派彩：約 $'+avg.toFixed(0)+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';
   h.style.display='block';
 }
 function selectedSmartBudget(){
