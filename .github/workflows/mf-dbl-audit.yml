@@ -1,0 +1,35 @@
+name: MF DBL Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mf-dbl-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect original DBL selection structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf audit-mf && mkdir audit-mf
+          unzip -q "MF_QuickBet_9_3_3 (2).zip" -d audit-mf
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path("audit-mf/init.js").read_text("utf-8",errors="ignore")
+          needles=["mf007_dbl","dblrn1","dblrn2","dblAdd","dbllist","wpbank1_DBL","wpbank2_DBL","DBL_","dblItem","mf007_hno2"]
+          for n in needles:
+              print("\n====",n,"====")
+              pos=0;c=0
+              while True:
+                  i=s.find(n,pos)
+                  if i<0: break
+                  x=re.sub(r"\s+"," ",s[max(0,i-2200):min(len(s),i+5000)])
+                  print(x[:7000])
+                  pos=i+len(n);c+=1
+                  if c>=8: break
+          PY
