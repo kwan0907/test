@@ -118,10 +118,19 @@ jobs:
 
       - name: Commit ZIP
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # The ZIP is binary. If a previous build pushed a ZIP while this run
+          # was building, rebase cannot merge it. Preserve our freshly built
+          # ZIP, move to the latest main, then commit the replacement on top.
+          cp MF_QuickBet_9_3_3_STANDALONE.zip /tmp/MF_QuickBet_9_3_3_STANDALONE.zip
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/MF_QuickBet_9_3_3_STANDALONE.zip MF_QuickBet_9_3_3_STANDALONE.zip
+
           git add MF_QuickBet_9_3_3_STANDALONE.zip
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Build MF standalone full local feature mode [skip ci]"
-          git pull --rebase origin main
-          git push
+          git push origin HEAD:main
