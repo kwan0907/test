@@ -1,0 +1,33 @@
+name: HKJC Selector Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-selector-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect WPQ selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --compressed -A "Mozilla/5.0" -sS "https://bet.hkjc.com/static/js/main.0a8a63e2.js" -o /tmp/m.js
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path("/tmp/m.js").read_text("utf-8",errors="ignore")
+          for needle in ["wpbank","wpleg","odds_","QINBanker","QPLBanker","oddsNodes","combString","oddsValue","matrix"]:
+              print("\n===",needle,"===")
+              pos=0;n=0
+              while True:
+                  i=s.find(needle,pos)
+                  if i<0: break
+                  x=re.sub(r"\s+"," ",s[max(0,i-2500):min(len(s),i+5000)])
+                  print(x[:7500])
+                  pos=i+len(needle);n+=1
+                  if n>=8: break
+          PY
