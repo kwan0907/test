@@ -3,10 +3,18 @@
 if(window.__MF007_LOCAL_FULL__)return;window.__MF007_LOCAL_FULL__=true;
 var $q=function(s,r){return(r||document).querySelector(s)},$qa=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
 var text=function(e){return((e&&e.textContent)||'').replace(/\s+/g,' ').trim()},num=function(v){v=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''));return isFinite(v)?v:NaN},iv=function(v){v=parseInt(String(v==null?'':v).replace(/\D/g,''),10);return isFinite(v)?v:NaN};
-function hideLogin(){
-  var a=['#mf007_loginDiv','#mf007_member-btn','.mf007_member-btn','.mf007_logout-btn'];
-  for(var i=0;i<a.length;i++)$qa(a[i]).forEach(function(e){e.style.display='none'});
+function installLocalCss(){
+  if(document.getElementById('mf007_local_css'))return;
+  var st=document.createElement('style');
+  st.id='mf007_local_css';
+  st.textContent=[
+    '#mf007_loginDiv{display:none!important}',
+    '#mf007_member-btn,.mf007_member-btn,.mf007_logout-btn{display:none!important}',
+    '#mf007_localSmartBtn{display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}'
+  ].join('');
+  (document.head||document.documentElement).appendChild(st);
 }
+function hideLogin(){installLocalCss();}
 function ensureSmartButton(){
   var e=$q('#mf007_SCcalbet')||$q('#mf007_calbet')||$q('#mf007_localSmartBtn');
   if(e){
