@@ -384,6 +384,37 @@ function orderedKeyFromComb(v){
   if(nums.length<2)return'';
   return nums[nums.length-2]+'-'+nums[nums.length-1];
 }
+function officialFctMap(raceNo){
+  var pools=officialPools(),src=[];
+  for(var i=0;i<pools.length;i++){
+    var p=pools[i]||{},typ=String(p.oddsType||'').toUpperCase();
+    var rr=p.leg&&Array.isArray(p.leg.races)&&p.leg.races.length?+p.leg.races[0]:NaN;
+    if(isFinite(rr)&&rr!==+raceNo)continue;
+    if(typ==='FCT'||typ.indexOf('FCT')===0)src.push(p);
+  }
+  var map=new Map();
+  src.forEach(function(p){
+    (p.oddsNodes||[]).forEach(function(n){
+      if(!n)return;
+      var k=orderedKeyFromComb(n.combString),v=num(n.oddsValue);
+      if(k&&v>0)map.set(k,v);
+
+      var parent=oneRunner(n.combString);
+      (Array.isArray(n.bankerOdds)?n.bankerOdds:[]).forEach(function(b){
+        if(!b)return;
+        var bv=num(b.oddsValue);
+        if(!(bv>0))return;
+        var bk=orderedKeyFromComb(b.combString);
+        if(!bk&&isFinite(parent)){
+          var other=oneRunner(b.combString);
+          if(isFinite(other)&&other!==parent)bk=parent+'-'+other;
+        }
+        if(bk)map.set(bk,bv);
+      });
+    });
+  });
+  return map;
+}
 function officialDblMap(raceNo){
   var pools=officialPools(),src=[];
   for(var i=0;i<pools.length;i++){
@@ -418,13 +449,21 @@ function odds(p,r,cc){
   if(p==='q')officialMap=officialPairMap('QIN',r);
   else if(p==='qp')officialMap=officialPairMap('QPL',r);
   else if(p==='dbl')officialMap=officialDblMap(r);
+  else if(p==='fctb'||p==='fctbm')officialMap=officialFctMap(r);
 
   return cc.map(function(c){
-    var o=direct(p,r,c),key='';
-    if(c.h.length===2){
-      key=p==='dbl'?(c.h[0]+'-'+c.h[1]):(Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]));
+    var isOrdered=(p==='dbl'||p==='fctb'||p==='fctbm');
+    var key=c.h.length===2?(isOrdered?(c.h[0]+'-'+c.h[1]):(Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]))):'';
+    var o=NaN;
+
+    // FCT must be order-sensitive and must never borrow Q/QP odds.
+    if((p==='fctb'||p==='fctbm')&&officialMap&&key){
+      o=officialMap.get(key);
+    }else{
+      o=direct(p,r,c);
+      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
     }
-    if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
+
     c.o=o;
     return c;
   });
