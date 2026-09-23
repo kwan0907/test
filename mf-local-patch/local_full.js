@@ -370,21 +370,71 @@ function odds(p,r,cc){
 function dutch(rows,b){
   rows=rows.filter(function(x){return x.o>1});
   if(!rows.length)return null;
-  var minTotal=rows.length*10,cap=Math.floor((b*1.15)/10)*10;
-  if(cap<minTotal)return{err:'總投注額不足；最低需要約 
+  var minTotal=rows.length*10;
+  var cap=Math.floor((b*1.15)/10)*10;
+  if(cap<minTotal)return{err:'總投注額不足；最低需要約 $'+minTotal};
+  var inv=rows.map(function(x){return 1/x.o});
+  var sum=inv.reduce(function(a,c){return a+c},0);
+  var ideal=inv.map(function(w){return b*w/sum});
+  var st=ideal.map(function(v){return Math.max(10,Math.round(v/10)*10)});
+  var used=st.reduce(function(a,c){return a+c},0);
+  while(used<b&&used+10<=cap){
+    var bi=0,bd=-1e9;
+    for(var i=0;i<rows.length;i++){
+      var d=ideal[i]-st[i];
+      if(d>bd){bd=d;bi=i}
+    }
+    st[bi]+=10;used+=10;
+  }
+  while(used>cap){
+    var ri=-1,rd=-1e9;
+    for(var j=0;j<rows.length;j++){
+      if(st[j]<=10)continue;
+      var over=st[j]-ideal[j];
+      if(over>rd){rd=over;ri=j}
+    }
+    if(ri<0)break;
+    st[ri]-=10;used-=10;
+  }
+  return{
+    rows:rows.map(function(x,i){x.stake=st[i];x.pay=st[i]*x.o;return x}),
+    used:used,left:b-used,cap:cap
+  };
+}
 function label(p){return{w:'獨贏',p:'位置',wp:'獨贏 + 位置',q:'連贏',qp:'位置Q',qqp:'連贏及位置Q',fctb:'單膽二重彩',fctbm:'複膽二重彩',dbl:'孖寶'}[p]||p}
 function addClass(p){return p==='q'?'mf007_calbetSubmit_qin':p==='qp'?'mf007_calbetSubmit_qpl':(p==='fctb'||p==='fctbm')?'mf007_calbetSubmit_fct':p==='dbl'?'mf007_calbetSubmit_dbl':p==='w'?'mf007_calbetSubmit_win':''}
 function rel(p,x){return p==='w'?x.h[0]+'|'+x.stake:x.h.length===2?x.h[0]+'|'+x.h[1]+'|'+x.stake:''}
-function show(p,b,c){var h=$q('#mf007_calbetResultDiv');if(!h){h=document.createElement('div');h.id='mf007_calbetResultDiv';var a=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea')||$q('[id^="mf007_"]');if(a)a.parentNode.insertBefore(h,a.nextSibling)}var rows=c.rows.map(function(x){return'<tr><td>'+x.h.join(' > ')+'</td><td>'+x.o.toFixed(2)+'</td><td>$'+x.stake+'</td><td>$'+x.pay.toFixed(0)+'</td></tr>'}).join(''),C=addClass(p),R=c.rows.map(function(x){return rel(p,x)}).filter(Boolean).join('@@'),avg=c.rows.reduce(function(s,x){return s+x.pay},0)/c.rows.length;h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';h.style.display='block'}
+function show(p,b,c){
+  var h=$q('#mf007_calbetResultDiv');
+  if(!h){
+    h=document.createElement('div');h.id='mf007_calbetResultDiv';
+    var a=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea')||$q('[id^="mf007_"]');
+    if(a)a.parentNode.insertBefore(h,a.nextSibling);
+  }
+  var rows=c.rows.map(function(x){return '<tr><td>'+x.h.join(' > ')+'</td><td>'+x.o.toFixed(2)+'</td><td>$'+x.stake+'</td><td>$'+x.pay.toFixed(0)+'</td></tr>'}).join('');
+  var C=addClass(p),R=c.rows.map(function(x){return rel(p,x)}).filter(Boolean).join('@@');
+  var avg=c.rows.reduce(function(sum,x){return sum+x.pay},0)/c.rows.length;
+  h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：$'+b+'　實際：$'+c.used+'（最多 +15%）　平均預計派彩：約 $'+avg.toFixed(0)+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';
+  h.style.display='block';
+}
 function selectedSmartBudget(){
   var e=$q('.mf007_val.mf007_btnOn')||$q('#mf007_valDefault.mf007_btnOn')||$q('.mf007_num.mf007_btnOn[rel]');
-  if(e){
-    var v=num(e.getAttribute('rel')||text(e));
-    if(v>0)return Math.floor(v/10)*10;
-  }
+  if(e){var v=num(e.getAttribute('rel')||text(e));if(v>0)return Math.floor(v/10)*10;}
   return NaN;
 }
-function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var b=selectedSmartBudget();if(!(b>=10)){alert('====== 聰明投注訊息 ======\n\n請先在左邊選擇總投注額。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能讀取 '+missing.length+' 個組合的即時賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
+function run(){
+  hideLogin();
+  var p=pool(),r=race(),cc=combos(p);
+  if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}
+  var b=selectedSmartBudget();
+  if(!(b>=10)){alert('====== 聰明投注訊息 ======\n\n請先在左邊選擇總投注額。');return}
+  localStorage.setItem('mf007_local_smart_budget',String(b));
+  var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});
+  if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能讀取 '+missing.length+' 個組合的即時賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}
+  var c=dutch(pp,b);
+  if(c&&c.err){alert(c.err);return}
+  if(c)show(p,b,c);
+}
 document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet,#mf007_localSmartBtn');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
 var syncUI=function(){hideLogin();ensureSmartButton()};
 if(document.readyState==='loading'){
