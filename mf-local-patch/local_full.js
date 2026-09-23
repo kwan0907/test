@@ -59,7 +59,24 @@ function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&
 function pool(){var e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];if(e&&e.getAttribute('rel'))return e.getAttribute('rel');var a=[['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp'],['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betDbl','dbl']];for(var i=0;i<a.length;i++){e=$q(a[i][0]);if(e&&e.classList.contains('mf007_btnOn'))return a[i][1]}return'q'}
 function selected(s){return $qa(s).filter(function(e){return e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60})}
 function bankers(){return $qa('.mf007_hno').filter(function(e){return e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(isFinite)}
-function summary(){var all=$qa('[id^="mf007_"]');for(var i=0;i<all.length;i++){var m=text(all[i]).match(/(?:^|\s)(\d{1,2})\s*>\s*((?:\d{1,2}\s*){2,})/);if(m)return{b:[+m[1]],l:(m[2].match(/\d{1,2}/g)||[]).map(Number)}}return null}
+function summary(){
+  var all=$qa('[id^="mf007_"]');
+  for(var i=0;i<all.length;i++){
+    var t=text(all[i]),m=t.match(/(?:^|\s)(\d{1,2})\s*>\s*F(?:\s|$)/i);
+    if(m){
+      var banker=+m[1],horses=$qa('.mf007_hno').map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60&&x!==banker});
+      if(!horses.length){
+        var panel=$q('#mf007_dataArea')||document;
+        horses=$qa('a,button,td,div',panel).map(function(e){var tt=text(e);return /^\d{1,2}$/.test(tt)?+tt:NaN}).filter(function(x){return isFinite(x)&&x>0&&x<60&&x!==banker});
+      }
+      horses=Array.from(new Set(horses)).sort(function(a,b){return a-b});
+      if(horses.length)return{b:[banker],l:horses};
+    }
+    m=t.match(/(?:^|\s)(\d{1,2})\s*>\s*((?:\d{1,2}[\s,]+){1,}\d{1,2})/);
+    if(m)return{b:[+m[1]],l:(m[2].match(/\d{1,2}/g)||[]).map(Number)};
+  }
+  return null;
+}
 function uniq(a){return Array.from(new Set(a))}
 function combos(p){var f=selected('.mf007_hno'),s=selected('.mf007_hno2'),b=bankers(),l=f.filter(function(x){return b.indexOf(x)<0}),z=summary(),o=[];if((!b.length||!l.length)&&z){b=z.b;l=z.l}
 if(p==='w'||p==='p')return uniq(f.length?f:b.concat(l)).map(function(x){return{h:[x]}});
