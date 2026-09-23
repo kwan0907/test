@@ -56,15 +56,40 @@ function ensureSmartButton(){
   return null;
 }
 function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&&e.id.match(/raceno_(\d+)/);if(m)return+m[1];m=location.pathname.match(/\/(\d+)(?:\/?$|\?)/);return m?+m[1]:1}
+var __mfLocalPoolHint='';
+document.addEventListener('click',function(e){
+  var t=e.target&&e.target.closest&&e.target.closest('#mf007_betQin,#mf007_betQpl,#mf007_betQQP,#mf007_betFctB,#mf007_betFctBM,#mf007_betDbl,#mf007_betWin,#mf007_betPla,#mf007_betWP');
+  if(!t)return;
+  var m={
+    mf007_betQin:'q',
+    mf007_betQpl:'qp',
+    mf007_betQQP:'qqp',
+    mf007_betFctB:'fctb',
+    mf007_betFctBM:'fctbm',
+    mf007_betDbl:'dbl',
+    mf007_betWin:'w',
+    mf007_betPla:'p',
+    mf007_betWP:'wp'
+  };
+  if(m[t.id])__mfLocalPoolHint=m[t.id];
+},true);
+
 function pool(){
   var path=String(location.pathname||'').toLowerCase(),e;
   if(/\/dbl\//.test(path))return'dbl';
-  e=$q('#mf007_betDbl');
-  if(e&&(e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')))return'dbl';
-  e=$q('#mf007_BL_dbl');
-  if(e&&(e.classList.contains('mf007_btnLinkOn')||e.classList.contains('mf007_btnOn')))return'dbl';
+  if(/\/fct\//.test(path)){
+    if(__mfLocalPoolHint==='fctbm')return'fctbm';
+    return'fctb';
+  }
+  if(__mfLocalPoolHint)return __mfLocalPoolHint;
 
-  var a=[['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp']];
+  // Prefer the two Q-family buttons explicitly; QPL must not fall through to QIN.
+  e=$q('#mf007_betQpl');
+  if(e&&e.classList.contains('mf007_btnOn'))return'qp';
+  e=$q('#mf007_betQin');
+  if(e&&e.classList.contains('mf007_btnOn'))return'q';
+
+  var a=[['#mf007_betFctBM','fctbm'],['#mf007_betFctB','fctb'],['#mf007_betDbl','dbl'],['#mf007_betQQP','qqp'],['#mf007_betWP','wp'],['#mf007_betPla','p'],['#mf007_betWin','w']];
   for(var i=0;i<a.length;i++){
     e=$q(a[i][0]);
     if(e&&e.classList.contains('mf007_btnOn'))return a[i][1];
@@ -337,6 +362,87 @@ function visiblePairMap(poolCode){
   if(!c[ix])ix=0;
   return parseVisibleMatrix(c[ix]);
 }
+function visibleFctMap(){
+  var n=horseNumbers().length||12,best=null;
+
+  $qa('table').forEach(function(t){
+    if(best||!t.getClientRects().length||t.closest('[id^="mf007_"]'))return;
+    var rows=$qa('tr',t);
+    for(var ri=0;ri<Math.min(rows.length,8);ri++){
+      var hdr=[];
+      $qa('td,th',rows[ri]).forEach(function(c){
+        var tt=text(c);
+        if(/^\d{1,2}$/.test(tt)){
+          var v=+tt,cr=c.getBoundingClientRect();
+          if(v>=1&&v<=Math.max(n,14))hdr.push({v:v,x:(cr.left+cr.right)/2,w:Math.max(1,cr.width)});
+        }
+      });
+      hdr.sort(function(a,b){return a.x-b.x});
+
+      var run=[];
+      for(var j=0;j<hdr.length;j++){
+        if(!run.length||hdr[j].v===run[run.length-1].v+1)run.push(hdr[j]);
+        else run=hdr[j].v===1?[hdr[j]]:[];
+      }
+      if(run.length>=Math.min(8,Math.max(6,n-2))&&run[0].v===1){
+        best={table:t,header:rows[ri],cols:run.filter(function(x){return x.v<=n})};
+        break;
+      }
+    }
+  });
+
+  var map=new Map();
+  if(!best)return map;
+
+  var rows=$qa('tr',best.table),headerRect=best.header.getBoundingClientRect(),rowNo=1,firstX=best.cols[0].x;
+  for(var ri=0;ri<rows.length&&rowNo<=n;ri++){
+    var tr=rows[ri],rr=tr.getBoundingClientRect();
+    if(rr.top<=headerRect.top+1||!tr.getClientRects().length)continue;
+
+    var cells=$qa('td,th',tr);
+    if(!cells.length)continue;
+
+    // Ignore repeated header rows.
+    var seq=0;
+    cells.forEach(function(c){
+      var tt=text(c);
+      if(/^\d{1,2}$/.test(tt)){var v=+tt;if(v>=1&&v<=n)seq++;}
+    });
+    if(seq>=Math.min(8,Math.max(6,n-2)))continue;
+
+    // Prefer an explicit row label to the left of the first odds column.
+    var explicit=NaN;
+    for(var ci=0;ci<cells.length;ci++){
+      var cr=cells[ci].getBoundingClientRect(),tt=text(cells[ci]);
+      if(cr.right<firstX-5&&/^\d{1,2}$/.test(tt)){
+        var rv=+tt;
+        if(rv>=1&&rv<=n){explicit=rv;break;}
+      }
+    }
+    var rno=isFinite(explicit)?explicit:rowNo;
+
+    var wrote=0;
+    best.cols.forEach(function(col){
+      if(col.v===rno)return; // same horse cannot be first and second
+      var target=null,dist=1e9;
+      for(var ci=0;ci<cells.length;ci++){
+        var cr=cells[ci].getBoundingClientRect();
+        if(!cr.width)continue;
+        var d=Math.abs(((cr.left+cr.right)/2)-col.x);
+        if(d<dist){dist=d;target=cells[ci];}
+      }
+      if(!target||dist>Math.max(18,col.w*0.65))return;
+      var ov=cleanOddText(text(target));
+      if(ov>0){
+        map.set(rno+'-'+col.v,ov);
+        wrote++;
+      }
+    });
+
+    if(wrote>0)rowNo=Math.max(rowNo+1,rno+1);
+  }
+  return map;
+}
 function officialPools(){
   var el=document.getElementById('mf007_hkjc_official_odds_cache');
   if(!el)return[];
@@ -464,11 +570,14 @@ function officialDblMap(raceNo){
   return map;
 }
 function odds(p,r,cc){
-  var officialMap=null;
+  var officialMap=null,visibleFct=null;
   if(p==='q')officialMap=officialPairMap('QIN',r);
   else if(p==='qp')officialMap=officialPairMap('QPL',r);
   else if(p==='dbl')officialMap=officialDblMap(r);
-  else if(p==='fctb'||p==='fctbm')officialMap=officialFctMap(r);
+  else if(p==='fctb'||p==='fctbm'){
+    officialMap=officialFctMap(r);
+    visibleFct=visibleFctMap();
+  }
 
   return cc.map(function(c){
     var isOrdered=(p==='dbl'||p==='fctb'||p==='fctbm');
@@ -476,12 +585,17 @@ function odds(p,r,cc){
     var o=NaN;
 
     if(p==='dbl'){
-      // DBL is an ordered cross-race pool: race-1 runner -> race-2 runner.
-      // Use the HKJC DBL pool directly. Never substitute QIN/QPL or WIN×WIN.
       if(officialMap&&key)o=officialMap.get(key);
       if(!(o>1))o=direct('dbl',r,c);
     }else if(p==='fctb'||p==='fctbm'){
+      // FCT is ordered: first horse -> second horse.
+      // Prefer the exact FCT matrix currently visible on HKJC.
+      if(visibleFct&&key)o=visibleFct.get(key);
+      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
+    }else if(p==='qp'){
+      // QPL must never borrow QIN. Prefer the captured QPL pool first.
       if(officialMap&&key)o=officialMap.get(key);
+      if(!(o>1))o=direct('qp',r,c);
     }else{
       o=direct(p,r,c);
       if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
