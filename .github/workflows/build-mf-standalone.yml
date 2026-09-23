@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'mf-local-patch/**'
       - '.github/workflows/build-mf-standalone.yml'
 permissions:
   contents: write
@@ -11,95 +12,57 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build exact-original standalone
+      - name: Build full local standalone
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf build-mf
-          mkdir build-mf
+          rm -rf build-mf verify-orig
+          mkdir build-mf verify-orig
           unzip -q "MF_QuickBet_9_3_3 (2).zip" -d build-mf
-          rm -rf build-mf/__MACOSX
+          unzip -q "MF_QuickBet_9_3_3 (2).zip" -d verify-orig
+          rm -rf build-mf/__MACOSX verify-orig/__MACOSX
 
-          cat > build-mf/guest-popup.js <<'EOF'
-          (() => {
-            'use strict';
-            const apply = () => {
-              const loading = document.getElementById('loading');
-              const login = document.getElementById('loginDiv');
-              const setting = document.getElementById('settingDiv');
-              if (loading) loading.style.display = 'none';
-              if (login) login.style.display = 'none';
-              if (setting) setting.style.display = 'block';
-              document.querySelectorAll('.mf007_memberSection').forEach(el => el.style.display = 'none');
-              const purchase = document.getElementById('purchaseBtn');
-              if (purchase) purchase.style.display = 'none';
-              document.querySelectorAll('.logout-btn').forEach(el => {
-                const td = el.closest('td');
-                if (td) td.style.display = 'none';
-                else el.style.display = 'none';
-              });
-              ['dd_custid','dd_email','dd_expire','qb_expire','scdd_expire','scqb_expire'].forEach(id => {
-                const el = document.getElementById(id);
-                const tr = el && el.closest('tr');
-                if (tr) tr.style.display = 'none';
-              });
-            };
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply, { once: true });
-            else apply();
-            const observer = new MutationObserver(apply);
-            observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['style','class'] });
-            setInterval(apply, 750);
-          })();
-          EOF
-
-          cat > build-mf/guest-content.js <<'EOF'
-          (() => {
-            'use strict';
-            const apply = () => {
-              const login = document.getElementById('mf007_loginDiv');
-              if (login) login.style.display = 'none';
-              document.querySelectorAll('.mf007_logout-btn,.mf007_member-btn').forEach(el => el.style.display = 'none');
-              document.querySelectorAll('#mf007_settingDiv .mf007_memberSection').forEach(el => el.style.display = 'none');
-            };
-            apply();
-            new MutationObserver(apply).observe(document.documentElement, { childList: true, subtree: true });
-          })();
-          EOF
+          cp mf-local-patch/local_full.js build-mf/local_full.js
+          cp mf-local-patch/local_popup.js build-mf/local_popup.js
 
           python - <<'PY'
           import json
           from pathlib import Path
 
-          p = Path("build-mf/popup.html")
-          s = p.read_text("utf-8")
-          if "guest-popup.js" not in s:
-              s = s.replace("</body>", '  <script src="guest-popup.js"></script>\n  </body>')
-          p.write_text(s, "utf-8")
+          p=Path("build-mf/popup.html")
+          s=p.read_text("utf-8")
+          if "local_popup.js" not in s:
+              s=s.replace("</body>", '<script src="local_popup.js"></script>\n</body>')
+          p.write_text(s,"utf-8")
 
-          m = Path("build-mf/manifest.json")
-          d = json.loads(m.read_text("utf-8"))
-          for cs in d.get("content_scripts", []):
-              js = cs.setdefault("js", [])
-              if "guest-content.js" not in js:
-                  js.append("guest-content.js")
-          d["version"] = "9.3.3.1"
-          m.write_text(json.dumps(d, ensure_ascii=False, indent=4) + "\n", "utf-8")
+          m=Path("build-mf/manifest.json")
+          d=json.loads(m.read_text("utf-8"))
+          for cs in d.get("content_scripts",[]):
+              js=[x for x in cs.get("js",[]) if x!="local_full.js"]
+              try:
+                  i=js.index("init.js")
+              except ValueError:
+                  i=len(js)
+              js.insert(i,"local_full.js")
+              cs["js"]=js
+          d["version"]="9.3.3.2"
+          d["description"]="賽馬熱錢流聰明投注系統 - 本機計算版"
+          m.write_text(json.dumps(d,ensure_ascii=False,indent=4)+"\n","utf-8")
           PY
+
+          node --check build-mf/local_full.js
+          node --check build-mf/local_popup.js
+
+          for f in init.js popup.js background.js cors.js jquery.js mf007_styles.css; do
+            test "$(sha256sum "verify-orig/$f" | awk '{print $1}')" = "$(sha256sum "build-mf/$f" | awk '{print $1}')"
+          done
+
+          grep -q 'local_full.js' build-mf/manifest.json
+          grep -q 'local_popup.js' build-mf/popup.html
 
           rm -f MF_QuickBet_9_3_3_STANDALONE.zip
           (cd build-mf && zip -qr ../MF_QuickBet_9_3_3_STANDALONE.zip .)
           unzip -t MF_QuickBet_9_3_3_STANDALONE.zip
-
-      - name: Verify original calculation core unchanged
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf verify-orig
-          mkdir verify-orig
-          unzip -q "MF_QuickBet_9_3_3 (2).zip" -d verify-orig
-          for f in init.js popup.js background.js cors.js; do
-            test "$(sha256sum "verify-orig/$f" | awk '{print $1}')" = "$(sha256sum "build-mf/$f" | awk '{print $1}')"
-          done
 
       - name: Commit ZIP
         run: |
@@ -107,5 +70,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MF_QuickBet_9_3_3_STANDALONE.zip
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Build exact original MF standalone [skip ci]"
+          git commit -m "Build MF standalone local smart calculator [skip ci]"
           git push
