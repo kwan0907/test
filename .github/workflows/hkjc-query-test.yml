@@ -1,0 +1,25 @@
+name: HKJC Query Test
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-query-test.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query official QIN/QPL odds
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          q='''query racing($date: String, $venueCode: String, $oddsTypes: [OddsType], $raceNo: Int) { raceMeetings(date: $date, venueCode: $venueCode) { pmPools(oddsTypes: $oddsTypes, raceNo: $raceNo) { oddsType oddsNodes { combString oddsValue bankerOdds { combString oddsValue } } } } }'''
+          body=json.dumps({"query":q,"variables":{"date":"2026-09-23","venueCode":"HV","oddsTypes":["QIN","QPL"],"raceNo":1}}).encode()
+          req=urllib.request.Request("https://info.cld.hkjc.com/graphql/base/",data=body,headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+          with urllib.request.urlopen(req,timeout=20) as r:
+              d=json.load(r)
+          print(json.dumps(d,ensure_ascii=False)[:30000])
+          PY
