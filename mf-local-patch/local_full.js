@@ -224,6 +224,32 @@ function selectionSpec(){
   return null;
 }
 function summary(){return selectionSpec()}
+function fctSelectionSpec(){
+  var box=$q('#mf007_fs_input');
+  if(!box)return null;
+
+  var bankers=$qa('.mf007_c_banker',box)
+    .map(function(e){return runnerNo(e)})
+    .filter(function(x){return isFinite(x)&&x>0&&x<60});
+
+  var rawLegs=$qa('.mf007_c_leg',box)
+    .map(function(e){return String(e.getAttribute('rel')||text(e)).trim()})
+    .filter(Boolean);
+
+  if(!bankers.length)return null;
+
+  var field=rawLegs.some(function(v){return /^(?:F|全|全餐)$/i.test(v)});
+  var legs=field
+    ? horseNumbers().filter(function(x){return bankers.indexOf(x)<0})
+    : rawLegs.map(function(v){return iv(v)})
+        .filter(function(x){return isFinite(x)&&x>0&&x<60&&bankers.indexOf(x)<0});
+
+  bankers=Array.from(new Set(bankers)).sort(function(a,b){return a-b});
+  legs=Array.from(new Set(legs)).sort(function(a,b){return a-b});
+
+  return {bankers:bankers,legs:legs,field:field};
+}
+
 function uniq(a){return Array.from(new Set(a))}
 function combos(p){
   var f=selected('.mf007_hno'),s2=selected('.mf007_hno2'),b=bankers(),o=[],all=horseNumbers(),l=f.filter(function(x){return b.indexOf(x)<0}),spec=p==='dbl'?null:selectionSpec();
@@ -253,9 +279,47 @@ function combos(p){
   if(p==='w'||p==='p')return uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).map(function(x){return{h:[x]}});
   if(p==='wp'){uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).forEach(function(x){o.push({h:[x],sub:'WIN'});o.push({h:[x],sub:'PLA'})});return o}
   if(p==='fctb'||p==='fctbm'){
-    if(b.length){b.forEach(function(x){l.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
-    else{f=uniq(fieldOn()?all:f);f.forEach(function(x){f.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
-    return o
+    var fs=fctSelectionSpec();
+
+    if(fs&&fs.bankers.length&&fs.legs.length){
+      fs.bankers.forEach(function(x){
+        fs.legs.forEach(function(y){
+          if(x===y)return;
+          // Single/straight FCT: first place x -> second place y.
+          o.push({h:[x,y]});
+
+          // Multiple/box FCT: also include the reverse orientation,
+          // because horizontal header is 1st place and vertical row is 2nd place.
+          if(p==='fctbm')o.push({h:[y,x]});
+        });
+      });
+    }else if(b.length){
+      b.forEach(function(x){
+        l.forEach(function(y){
+          if(x===y)return;
+          o.push({h:[x,y]});
+          if(p==='fctbm')o.push({h:[y,x]});
+        });
+      });
+    }else{
+      f=uniq(fieldOn()?all:f);
+      for(var fi=0;fi<f.length;fi++){
+        for(var fj=0;fj<f.length;fj++){
+          if(fi===fj)continue;
+          // For multiple/box, every ordered permutation is a distinct FCT.
+          // For single-direction fallback, preserve the selected order only once.
+          if(p==='fctbm'||fi<fj)o.push({h:[f[fi],f[fj]]});
+        }
+      }
+    }
+
+    var fseen={};
+    return o.filter(function(c){
+      var k=c.h[0]+'-'+c.h[1];
+      if(fseen[k])return false;
+      fseen[k]=1;
+      return true;
+    });
   }
 
   // Q / QP banker-to-legs: one combination for each leg.
