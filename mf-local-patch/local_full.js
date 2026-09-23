@@ -453,7 +453,10 @@ function visibleFctMap(){
       if(!target||dist>Math.max(18,col.w*0.65))return;
       var ov=cleanOddText(text(target));
       if(ov>0){
-        map.set(rno+'-'+col.v,ov);
+        // HKJC FCT matrix orientation:
+        // horizontal header = 1st place, vertical row = 2nd place.
+        // Therefore row 1 / column 11 means 11 > 1, NOT 1 > 11.
+        map.set(col.v+'-'+rno,ov);
         wrote++;
       }
     });
