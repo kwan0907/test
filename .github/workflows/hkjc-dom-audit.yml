@@ -1,0 +1,44 @@
+name: HKJC DOM Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-dom-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect HKJC page bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://bet.hkjc.com/ch/racing/wpq/2026-09-23/HV/1"
+          curl -L --compressed -A "Mozilla/5.0" -sS "$URL" -o /tmp/hkjc.html || true
+          echo "HTML_SIZE $(wc -c </tmp/hkjc.html)"
+          python - <<'PY'
+          from pathlib import Path
+          import re, urllib.parse, subprocess, os
+          h=Path("/tmp/hkjc.html").read_text("utf-8",errors="ignore")
+          srcs=re.findall(r'<script[^>]+src=["\']([^"\']+)["\']',h,re.I)
+          base="https://bet.hkjc.com"
+          print("SCRIPTS",len(srcs))
+          for i,src in enumerate(srcs[:30]):
+              u=urllib.parse.urljoin(base,src)
+              print("SCRIPT",u)
+              try:
+                  p=f"/tmp/js{i}.js"
+                  subprocess.run(["curl","-L","--compressed","-A","Mozilla/5.0","-sS",u,"-o",p],check=False,timeout=25)
+                  s=Path(p).read_text("utf-8",errors="ignore")
+                  if any(k in s for k in ["wpbank1_QIN_","odds_QIN_","wpleg_QIN_","QIN","QPL"]):
+                      print("MATCH",u,"SIZE",len(s))
+                      for needle in ["wpbank1_QIN_","wpleg_QIN_","odds_QIN_","QIN","QPL"]:
+                          pos=s.find(needle)
+                          if pos>=0:
+                              x=re.sub(r"\s+"," ",s[max(0,pos-1200):pos+2500])
+                              print("CTX",needle,x[:3700])
+              except Exception as e:
+                  print("ERR",u,e)
+          PY
