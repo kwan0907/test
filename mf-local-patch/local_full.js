@@ -3,54 +3,49 @@
 if(window.__MF007_LOCAL_FULL__)return;window.__MF007_LOCAL_FULL__=true;
 var $q=function(s,r){return(r||document).querySelector(s)},$qa=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
 var text=function(e){return((e&&e.textContent)||'').replace(/\s+/g,' ').trim()},num=function(v){v=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''));return isFinite(v)?v:NaN},iv=function(v){v=parseInt(String(v==null?'':v).replace(/\D/g,''),10);return isFinite(v)?v:NaN};
-function hideLogin(){['#mf007_loginDiv','#mf007_member-btn','.mf007_member-btn','.mf007_logout-btn'].forEach(function(s){$qa(s).forEach(function(e){e.style.display='none'})});$qa('#mf007_loginDiv a,#mf007_loginDiv button').forEach(function(e){e.style.display='none'})}
-
+function hideLogin(){
+  var a=['#mf007_loginDiv','#mf007_member-btn','.mf007_member-btn','.mf007_logout-btn'];
+  for(var i=0;i<a.length;i++)$qa(a[i]).forEach(function(e){e.style.display='none'});
+}
 function ensureSmartButton(){
-  var candidates=$qa('button,a,input[type="button"],input[type="submit"],div,span').filter(function(e){
-    var t=(e.value||text(e)||'').replace(/\s+/g,'').trim();
-    return t==='聰明計算'||t.indexOf('聰明計算不能使用')>=0||t.indexOf('用戶尚未登入')>=0;
-  });
-  var chosen=null;
-  for(var i=0;i<candidates.length;i++){
-    var e=candidates[i];
-    if(e.closest('#mf007_loginDiv'))continue;
-    var t=(e.value||text(e)||'').replace(/\s+/g,'').trim();
-    if(t==='聰明計算'){chosen=e;break}
-    if(!chosen&&t.indexOf('聰明計算不能使用')>=0)chosen=e;
+  var e=$q('#mf007_SCcalbet')||$q('#mf007_calbet')||$q('#mf007_localSmartBtn');
+  if(e){
+    if(e.tagName==='INPUT')e.value='聰明計算';else e.textContent='聰明計算';
+    e.id='mf007_localSmartBtn';
+    e.style.display='';
+    e.style.visibility='visible';
+    e.style.opacity='1';
+    e.style.pointerEvents='auto';
+    e.removeAttribute('disabled');
+    return e;
   }
-  if(chosen){
-    if(chosen.tagName==='INPUT') chosen.value='聰明計算';
-    else chosen.textContent='聰明計算';
-    chosen.id='mf007_localSmartBtn';
-    chosen.style.display='';
-    chosen.style.visibility='visible';
-    chosen.style.opacity='1';
-    chosen.style.pointerEvents='auto';
-    chosen.style.cursor='pointer';
-    chosen.removeAttribute('disabled');
-    // If this was the original red "not logged in" notice, turn it back into a normal action control.
-    if((chosen.className||'').toString().indexOf('mf007_')<0){
-      chosen.style.border='1px solid #9b9b9b';
-      chosen.style.background='#fff';
-      chosen.style.color='#222';
-      chosen.style.padding='10px 14px';
-      chosen.style.textAlign='center';
-      chosen.style.fontWeight='600';
-      chosen.style.borderRadius='2px';
-    }
-  } else {
-    var host=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea');
-    if(host){
-      var b=document.createElement('button');
-      b.id='mf007_localSmartBtn';
-      b.type='button';
-      b.textContent='聰明計算';
-      b.style.cssText='width:100%;margin-top:8px;padding:10px 12px;border:1px solid #9b9b9b;background:#fff;color:#222;font-size:14px;font-weight:600;cursor:pointer';
-      host.appendChild(b);
-      chosen=b;
-    }
+
+  // Original logged-out UI renders this exact error block.
+  var err=$q('.mf007_blockErr');
+  if(err&&/聰明計算不能使用/.test(text(err))){
+    var b=document.createElement('a');
+    b.href='javascript:void(0)';
+    b.id='mf007_localSmartBtn';
+    b.className='mf007_calbet mf007_btnLeft';
+    b.textContent='聰明計算';
+    b.style.display='block';
+    b.style.textAlign='center';
+    err.parentNode.replaceChild(b,err);
+    return b;
   }
-  return chosen;
+
+  // Final fallback: only touch the known MF calculator host.
+  var host=$q('#mf007_calbetbtnDiv');
+  if(host&&!$q('#mf007_localSmartBtn')){
+    var x=document.createElement('a');
+    x.href='javascript:void(0)';
+    x.id='mf007_localSmartBtn';
+    x.className='mf007_calbet mf007_btnLeft';
+    x.textContent='聰明計算';
+    host.insertBefore(x,host.firstChild);
+    return x;
+  }
+  return null;
 }
 function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&&e.id.match(/raceno_(\d+)/);if(m)return+m[1];m=location.pathname.match(/\/(\d+)(?:\/?$|\?)/);return m?+m[1]:1}
 function pool(){var e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];if(e&&e.getAttribute('rel'))return e.getAttribute('rel');var a=[['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp'],['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betDbl','dbl']];for(var i=0;i<a.length;i++){e=$q(a[i][0]);if(e&&e.classList.contains('mf007_btnOn'))return a[i][1]}return'q'}
@@ -77,6 +72,15 @@ function show(p,b,c){var h=$q('#mf007_calbetResultDiv');if(!h){h=document.create
 function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\\n\\n請先選擇投注組合。');return}var last=+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000,raw=prompt('本機聰明計算（'+label(p)+'）\\n\\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\\n\\n目前頁面未能讀取 '+missing.length+' 個組合的即時賠率。\\n請確認馬會賠率矩陣已載入，再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
 document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet,#mf007_localSmartBtn');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
 var syncUI=function(){hideLogin();ensureSmartButton()};
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',syncUI,{once:true})}else{syncUI()}
-var tries=0,bootTimer=setInterval(function(){syncUI();tries++;if(tries>=8)clearInterval(bootTimer)},1500);
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',function(){
+    syncUI();
+    setTimeout(syncUI,1200);
+    setTimeout(syncUI,3000);
+  },{once:true});
+}else{
+  syncUI();
+  setTimeout(syncUI,1200);
+  setTimeout(syncUI,3000);
+}
 })();
