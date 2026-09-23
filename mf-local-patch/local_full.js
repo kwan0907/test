@@ -56,7 +56,23 @@ function ensureSmartButton(){
   return null;
 }
 function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&&e.id.match(/raceno_(\d+)/);if(m)return+m[1];m=location.pathname.match(/\/(\d+)(?:\/?$|\?)/);return m?+m[1]:1}
-function pool(){var e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];if(e&&e.getAttribute('rel'))return e.getAttribute('rel');var a=[['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp'],['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betDbl','dbl']];for(var i=0;i<a.length;i++){e=$q(a[i][0]);if(e&&e.classList.contains('mf007_btnOn'))return a[i][1]}return'q'}
+function pool(){
+  var path=String(location.pathname||'').toLowerCase(),e;
+  if(/\/dbl\//.test(path))return'dbl';
+  e=$q('#mf007_betDbl');
+  if(e&&(e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')))return'dbl';
+  e=$q('#mf007_BL_dbl');
+  if(e&&(e.classList.contains('mf007_btnLinkOn')||e.classList.contains('mf007_btnOn')))return'dbl';
+
+  var a=[['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp']];
+  for(var i=0;i<a.length;i++){
+    e=$q(a[i][0]);
+    if(e&&e.classList.contains('mf007_btnOn'))return a[i][1];
+  }
+  e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];
+  if(e&&e.getAttribute('rel'))return e.getAttribute('rel');
+  return'q';
+}
 function runnerNo(e){
   if(!e)return NaN;
   var rel=String(e.getAttribute('rel')||'').trim();
@@ -166,10 +182,21 @@ function selectionSpec(){
 function summary(){return selectionSpec()}
 function uniq(a){return Array.from(new Set(a))}
 function combos(p){
-  var f=selected('.mf007_hno'),s2=selected('.mf007_hno2'),b=bankers(),o=[],all=horseNumbers(),l=f.filter(function(x){return b.indexOf(x)<0}),spec=selectionSpec();
+  var f=selected('.mf007_hno'),s2=selected('.mf007_hno2'),b=bankers(),o=[],all=horseNumbers(),l=f.filter(function(x){return b.indexOf(x)<0}),spec=p==='dbl'?null:selectionSpec();
 
-  // The displayed original selection is authoritative. It is already what the
-  // user sees in the white box: "12 > F" or "12 > 1 2 ... 11".
+  if(p==='dbl'){
+    var leg1=uniq(f),leg2=uniq(s2);
+    if(controlOn('#mf007_hno_F')||controlOn('#mf007_hno_A'))leg1=allRunnerNumbers('.mf007_hno');
+    if(controlOn('#mf007_hno2_F')||controlOn('#mf007_hno2_A'))leg2=allRunnerNumbers('.mf007_hno2');
+    leg1.forEach(function(x){
+      leg2.forEach(function(y){
+        o.push({h:[x,y]});
+      });
+    });
+    return o;
+  }
+
+  // The displayed original selection is authoritative for single-race pools.
   if(spec){
     b=spec.b.slice();
     l=spec.l.slice();
@@ -181,14 +208,6 @@ function combos(p){
 
   if(p==='w'||p==='p')return uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).map(function(x){return{h:[x]}});
   if(p==='wp'){uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).forEach(function(x){o.push({h:[x],sub:'WIN'});o.push({h:[x],sub:'PLA'})});return o}
-  if(p==='dbl'){
-    var leg1=uniq(f.length?f:b.concat(l));
-    var leg2=uniq(s2);
-    if(!leg1.length&&(controlOn('#mf007_hno_F')||controlOn('#mf007_hno_A')))leg1=allRunnerNumbers('.mf007_hno');
-    if(!leg2.length&&(controlOn('#mf007_hno2_F')||controlOn('#mf007_hno2_A')))leg2=allRunnerNumbers('.mf007_hno2');
-    leg1.forEach(function(x){leg2.forEach(function(y){o.push({h:[x,y]})})});
-    return o
-  }
   if(p==='fctb'||p==='fctbm'){
     if(b.length){b.forEach(function(x){l.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
     else{f=uniq(fieldOn()?all:f);f.forEach(function(x){f.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
@@ -456,9 +475,13 @@ function odds(p,r,cc){
     var key=c.h.length===2?(isOrdered?(c.h[0]+'-'+c.h[1]):(Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]))):'';
     var o=NaN;
 
-    // FCT must be order-sensitive and must never borrow Q/QP odds.
-    if((p==='fctb'||p==='fctbm')&&officialMap&&key){
-      o=officialMap.get(key);
+    if(p==='dbl'){
+      // DBL is an ordered cross-race pool: race-1 runner -> race-2 runner.
+      // Use the HKJC DBL pool directly. Never substitute QIN/QPL or WIN×WIN.
+      if(officialMap&&key)o=officialMap.get(key);
+      if(!(o>1))o=direct('dbl',r,c);
+    }else if(p==='fctb'||p==='fctbm'){
+      if(officialMap&&key)o=officialMap.get(key);
     }else{
       o=direct(p,r,c);
       if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
