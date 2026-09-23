@@ -193,6 +193,12 @@ function pairKeyFromComb(v){
   if(a===b)return'';
   return Math.min(a,b)+'-'+Math.max(a,b);
 }
+function oneRunner(v){
+  var m=String(v==null?'':v).match(/\d{1,2}/g);
+  if(!m||!m.length)return NaN;
+  var n=+m[m.length-1];
+  return n>0&&n<60?n:NaN;
+}
 function officialPairMap(poolCode,raceNo){
   var pools=officialPools(),exact=[],fallback=[];
   for(var i=0;i<pools.length;i++){
@@ -203,13 +209,30 @@ function officialPairMap(poolCode,raceNo){
     else if(typ.indexOf(poolCode)===0)fallback.push(p);
   }
   var src=exact.length?exact:fallback,map=new Map();
+
   src.forEach(function(p){
     (p.oddsNodes||[]).forEach(function(n){
-      var k=pairKeyFromComb(n&&n.combString),v=num(n&&n.oddsValue);
+      if(!n)return;
+
+      // Format A: node combString already contains a complete pair.
+      var k=pairKeyFromComb(n.combString),v=num(n.oddsValue);
       if(k&&v>0)map.set(k,v);
-      (n&&Array.isArray(n.bankerOdds)?n.bankerOdds:[]).forEach(function(b){
-        var bk=pairKeyFromComb(b&&b.combString),bv=num(b&&b.oddsValue);
-        if(bk&&bv>0)map.set(bk,bv);
+
+      // Format B used by HKJC QIN/QPL matrices:
+      // parent node identifies the row runner, bankerOdds entries identify
+      // the other runner and carry the displayed pair odds.
+      var parent=oneRunner(n.combString);
+      (Array.isArray(n.bankerOdds)?n.bankerOdds:[]).forEach(function(b){
+        if(!b)return;
+        var bv=num(b.oddsValue);
+        if(!(bv>0))return;
+
+        var bk=pairKeyFromComb(b.combString);
+        if(!bk&&isFinite(parent)){
+          var other=oneRunner(b.combString);
+          if(isFinite(other)&&other!==parent)bk=Math.min(parent,other)+'-'+Math.max(parent,other);
+        }
+        if(bk)map.set(bk,bv);
       });
     });
   });
@@ -241,7 +264,19 @@ function label(p){return{w:'獨贏',p:'位置',wp:'獨贏 + 位置',q:'連贏',q
 function addClass(p){return p==='q'?'mf007_calbetSubmit_qin':p==='qp'?'mf007_calbetSubmit_qpl':(p==='fctb'||p==='fctbm')?'mf007_calbetSubmit_fct':p==='dbl'?'mf007_calbetSubmit_dbl':p==='w'?'mf007_calbetSubmit_win':''}
 function rel(p,x){return p==='w'?x.h[0]+'|'+x.stake:x.h.length===2?x.h[0]+'|'+x.h[1]+'|'+x.stake:''}
 function show(p,b,c){var h=$q('#mf007_calbetResultDiv');if(!h){h=document.createElement('div');h.id='mf007_calbetResultDiv';var a=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea')||$q('[id^="mf007_"]');if(a)a.parentNode.insertBefore(h,a.nextSibling)}var rows=c.rows.map(function(x){return'<tr><td>'+x.h.join(' > ')+'</td><td>'+x.o.toFixed(2)+'</td><td>$'+x.stake+'</td><td>$'+x.pay.toFixed(0)+'</td></tr>'}).join(''),C=addClass(p),R=c.rows.map(function(x){return rel(p,x)}).filter(Boolean).join('@@'),avg=c.rows.reduce(function(s,x){return s+x.pay},0)/c.rows.length;h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：$'+b+'　實際：$'+c.used+(c.left?'　未分配：$'+c.left:'')+'　平均預計派彩：約 $'+avg.toFixed(0)+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';h.style.display='block'}
-function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var last=+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000,raw=prompt('本機聰明計算（'+label(p)+'）\n\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能從馬會官方即時資料讀取 '+missing.length+' 個組合的賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
+function currentPanelTotal(){
+  var panel=$q('#mf007_dataArea')||document;
+  var nodes=$qa('div,span,td',panel);
+  for(var i=0;i<nodes.length;i++){
+    var t=text(nodes[i]),m=t.match(/金額\s*[:：]\s*\$\s*([\d,]+)/);
+    if(m){
+      var v=+(m[1].replace(/,/g,''));
+      if(v>0)return v;
+    }
+  }
+  return NaN;
+}
+function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var panelTotal=currentPanelTotal(),last=isFinite(panelTotal)&&panelTotal>0?panelTotal:(+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000),raw=prompt('本機聰明計算（'+label(p)+'）\n\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能從馬會官方即時資料讀取 '+missing.length+' 個組合的賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
 document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet,#mf007_localSmartBtn');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
 var syncUI=function(){hideLogin();ensureSmartButton()};
 if(document.readyState==='loading'){
