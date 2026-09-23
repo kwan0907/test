@@ -1,0 +1,36 @@
+name: HKJC Racing Query Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-racing-query-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract racing GraphQL queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --compressed -A "Mozilla/5.0" -sS "https://bet.hkjc.com/static/js/main.0a8a63e2.js" -o /tmp/m.js
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path("/tmp/m.js").read_text("utf-8",errors="ignore")
+          # Extract quoted strings / template fragments containing racing pmPools and combinations/currentOdds.
+          for needle in ["pmPools(oddsTypes", "combinations {", "currentOdds", "mergedPoolId", "raceMeetings($date", "RacingPool", "combId"]:
+              print("\n===",needle,"===")
+              pos=0;n=0
+              while True:
+                  i=s.find(needle,pos)
+                  if i<0: break
+                  x=s[max(0,i-5000):min(len(s),i+9000)]
+                  x=x.replace("\\n","\n")
+                  x=re.sub(r"\s+"," ",x)
+                  print(x[:14000])
+                  pos=i+len(needle);n+=1
+                  if n>=8: break
+          PY
