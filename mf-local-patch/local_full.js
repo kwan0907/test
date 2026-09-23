@@ -96,6 +96,27 @@ function parseSelectionText(raw){
   return null;
 }
 function selectionSpec(){
+  // Exact original MF structure: the white selection box is #mf007_fs_input.
+  // Banker/legs are rendered as anchors with rel values, so read those directly
+  // instead of trying to infer selection from button classes or formatted text.
+  var box=$q('#mf007_fs_input');
+  if(box){
+    var bs=$qa('.mf007_c_banker',box).map(function(e){return String(e.getAttribute('rel')||text(e)).trim()}).filter(Boolean);
+    var ls=$qa('.mf007_c_leg',box).map(function(e){return String(e.getAttribute('rel')||text(e)).trim()}).filter(Boolean);
+    var bankers=bs.map(function(v){return iv(v)}).filter(function(x){return isFinite(x)&&x>0&&x<60});
+    if(bankers.length&&ls.length){
+      var b=bankers[0];
+      if(ls.some(function(v){return /^F$/i.test(v)})){
+        var all=horseNumbers().filter(function(x){return x!==b});
+        if(all.length)return{b:[b],l:all,field:true,raw:b+' > F'};
+      }
+      var legs=ls.map(function(v){return iv(v)}).filter(function(x){return isFinite(x)&&x>0&&x<60&&x!==b});
+      legs=Array.from(new Set(legs)).sort(function(a,b){return a-b});
+      if(legs.length)return{b:[b],l:legs,field:false,raw:b+' > '+legs.join(' ')};
+    }
+  }
+
+  // Fallback for any alternate original layout.
   var nodes=$qa('input[id^="mf007_"],textarea[id^="mf007_"],[id^="mf007_"]');
   for(var i=0;i<nodes.length;i++){
     var e=nodes[i],v='';
@@ -106,11 +127,7 @@ function selectionSpec(){
       if(r)return r;
     }
   }
-  // Final fallback: read the currently rendered page text once, only when
-  // Smart Calculation is clicked. This catches the original white summary box
-  // even if its element has no mf007 id.
-  var bodyText=(document.body&&document.body.innerText)||'';
-  return parseSelectionText(bodyText);
+  return null;
 }
 function summary(){return selectionSpec()}
 function uniq(a){return Array.from(new Set(a))}
