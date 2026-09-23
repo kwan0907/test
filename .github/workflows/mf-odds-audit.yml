@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect odds selectors
+      - name: Inspect original smart-calc odds flow
         shell: bash
         run: |
           set -euo pipefail
@@ -22,21 +22,28 @@ jobs:
           from pathlib import Path
           import re
           s=Path("audit-mf/init.js").read_text("utf-8",errors="ignore")
-          # Print literal strings that look related to HKJC odds / WPQ page DOM.
-          lits=re.findall(r"['\"]([^'\"]{2,180})['\"]",s)
-          keys=("odds","qin","qpl","wpq","comb","table","pool","race","runner","win","pla","betType","oddsTable","quinella","forecast","investment")
-          out=[]
-          for x in lits:
-              lx=x.lower()
-              if any(k.lower() in lx for k in keys):
-                  if x not in out: out.append(x)
-          print("=== RELATED LITERALS ===")
-          for x in out:
-              print(x)
-          print("=== QUERYSELECTOR CONTEXTS ===")
-          for m in re.finditer(r"(?:querySelector|querySelectorAll|getElementById|\$\()[^;]{0,350}",s,re.I):
-              x=re.sub(r"\s+"," ",m.group(0))
-              lx=x.lower()
-              if any(k.lower() in lx for k in ("odds","qin","qpl","wpq","race","table")):
-                  print(x[:500])
+          needles=[
+            "rsdatacalbet4b.aspx",
+            "rsdatacalbet",
+            "info.cld.hkjc.com",
+            "graphql",
+            "oddsValue",
+            "bankerOdds",
+            "betCalQin",
+            "mf007_calbet",
+            "mf007_val",
+            "mf007_betval"
+          ]
+          for n in needles:
+              print("\n====",n,"====")
+              pos=0; count=0
+              while True:
+                  i=s.find(n,pos)
+                  if i<0: break
+                  a=max(0,i-2200); b=min(len(s),i+3600)
+                  x=re.sub(r"\s+"," ",s[a:b])
+                  print(x[:5800])
+                  count+=1
+                  pos=i+len(n)
+                  if count>=8: break
           PY
