@@ -1,0 +1,36 @@
+name: HKJC GraphQL Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-graphql-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect HKJC GraphQL odds query
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --compressed -A "Mozilla/5.0" -sS "https://bet.hkjc.com/Config/GlobalConfig.js" -o /tmp/g.js
+          curl -L --compressed -A "Mozilla/5.0" -sS "https://bet.hkjc.com/static/js/main.0a8a63e2.js" -o /tmp/m.js
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          for fn in ["/tmp/g.js","/tmp/m.js"]:
+              s=Path(fn).read_text("utf-8",errors="ignore")
+              print("\n=== FILE",fn,"===")
+              for needle in ["GRAPHQL","graphql","pmPools(","combinations","combination","oddsValue","currentOdds","oddsType","QIN,QPL","QIN, QPL","poolInvs"]:
+                  print("\n---",needle,"---")
+                  pos=0;n=0
+                  while True:
+                      i=s.find(needle,pos)
+                      if i<0: break
+                      x=re.sub(r"\s+"," ",s[max(0,i-1800):min(len(s),i+4200)])
+                      print(x[:6000])
+                      pos=i+len(needle);n+=1
+                      if n>=4: break
+          PY
