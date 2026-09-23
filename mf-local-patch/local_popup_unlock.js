@@ -1,0 +1,9 @@
+(function(){
+'use strict';
+if(window.__MF007_POPUP_UNLOCK__)return;window.__MF007_POPUP_UNLOCK__=true;
+var D={id:'LOCAL',did:'LOCAL',msg:'0',exp:'本機版',sexp:'本機版',scexp:'本機版',scqexp:'本機版',wblt:'10,20,50,100,200,500,1000|10',qblt:'10,20,50,100,200,500,1000|10',tceblt:'10,20,50,100,200,500,1000|10',triblt:'10,20,50,100,200,500,1000|10',ffblt:'10,20,50,100,200,500,1000|10',qttblt:'10,20,50,100,200,500,1000|10',fctblt:'10,20,50,100,200,500,1000|10',exblt:'10,20,50,100,200,500,1000|10',dblblt:'10,20,50,100,200,500,1000|10',pcblt:'',eng:'0',sc:'0',mfr:'0',mfb:'0',ws:'0',qs:'0',fs:'0',cs:'0',smb:'1',scsmb:'1',wrOn:'0',wr:'0',prOn:'0',pr:'0',qrOn:'0',qr:'0',qprOn:'0',qpr:'0',qdpOn:'0',qdp:'0',auto:'0',autobet:'0'};
+var P=Object.assign({},D);try{chrome.storage.local.get({mf007_local_profile:D},function(x){P=Object.assign({},D,x.mf007_local_profile||{});});chrome.storage.sync.set({mf007_deviceid:'LOCAL'});}catch(e){}
+function save(p){P=Object.assign({},P,p||{});try{chrome.storage.local.set({mf007_local_profile:P});}catch(e){}}
+function rsp(u,d){u=String(u||'');if(/rsdatalogin11\.aspx/i.test(u))return Object.assign({},P,{id:'LOCAL',did:'LOCAL'});if(/rsdataupdate6\.aspx/i.test(u)){save(d);return{data:''};}if(/moneyflow007\.com\/rsdata/i.test(u))return{data:''};return null}
+if(window.jQuery){var $=window.jQuery,oa=$.ajax,oc=$.cors;function h(o){o=o||{};var r=rsp(o.url,o.data);if(r===null)return false;setTimeout(function(){if(o.success)o.success(r);if(o.complete)o.complete(r,'success');},0);return{abort:function(){}}}$.ajax=function(o){var r=h(o);return r||oa.apply(this,arguments)};if(typeof oc==='function')$.cors=function(o){var r=h(o);return r||oc.apply(this,arguments)}}
+})();
