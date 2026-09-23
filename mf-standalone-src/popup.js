@@ -1,0 +1,4 @@
+const DEFAULTS={win:10,place:10,qin:10,qpl:10,forecast:10,tierce:10,trio:10,first4:10,quartet:10,double:10,smartBudget:1000,autoSend:false};
+const form=document.getElementById('form'),status=document.getElementById('status');
+chrome.storage.local.get({mfStandalone:DEFAULTS},({mfStandalone})=>{const s={...DEFAULTS,...mfStandalone};for(const[k,v]of Object.entries(s)){const el=form.elements[k];if(!el)continue;if(el.type==='checkbox')el.checked=!!v;else el.value=v;}});
+form.addEventListener('submit',e=>{e.preventDefault();const s={};for(const k of Object.keys(DEFAULTS)){const el=form.elements[k];s[k]=el.type==='checkbox'?el.checked:Math.max(0,Number(el.value)||0);}chrome.storage.local.set({mfStandalone:s},()=>{status.textContent='已儲存';setTimeout(()=>status.textContent='',1500);});});

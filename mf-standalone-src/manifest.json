@@ -1,0 +1,10 @@
+{
+  "name": "賽馬熱錢流 Standalone Local",
+  "description": "本機版快速投注介面與注碼設定，不依賴第三方帳戶登入。",
+  "version": "9.3.3.1",
+  "manifest_version": 3,
+  "action": {"default_title": "Standalone 設定注碼","default_popup": "popup.html"},
+  "permissions": ["storage"],
+  "host_permissions": ["https://bet.hkjc.com/*","https://speedbet.hkjc.com/*"],
+  "content_scripts": [{"matches":["https://bet.hkjc.com/*","https://speedbet.hkjc.com/*"],"run_at":"document_end","js":["standalone.js"],"css":["standalone.css"]}]
+}

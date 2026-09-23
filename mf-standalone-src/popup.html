@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>設定注碼</title><link rel="stylesheet" href="popup.css"></head><body>
+<div class="top"><div><b>Standalone 9.3.3</b><small>本機設定</small></div></div>
+<div class="hint">設定會儲存在這部 Chrome。毋須第三方登入。</div>
+<form id="form"><div class="grid">
+<label>獨贏<input name="win" inputmode="numeric"></label><label>位置<input name="place" inputmode="numeric"></label>
+<label>連贏 Q<input name="qin" inputmode="numeric"></label><label>位置Q QP<input name="qpl" inputmode="numeric"></label>
+<label>二重彩<input name="forecast" inputmode="numeric"></label><label>三重彩<input name="tierce" inputmode="numeric"></label>
+<label>單T<input name="trio" inputmode="numeric"></label><label>四連環<input name="first4" inputmode="numeric"></label>
+<label>四重彩<input name="quartet" inputmode="numeric"></label><label>孖寶<input name="double" inputmode="numeric"></label>
+</div><label class="full">聰明投注總預算<input name="smartBudget" inputmode="numeric"></label>
+<label class="check"><input type="checkbox" name="autoSend"> 自動發送模式（只在你按「自動發送」時執行）</label>
+<button type="submit">儲存設定</button><div id="status"></div></form><script src="popup.js"></script></body></html>
