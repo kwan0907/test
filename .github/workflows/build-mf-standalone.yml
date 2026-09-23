@@ -22,6 +22,7 @@ jobs:
           unzip -q "MF_QuickBet_9_3_3 (2).zip" -d verify-orig
           rm -rf build-mf/__MACOSX verify-orig/__MACOSX
 
+          cp mf-local-patch/hkjc_capture.js build-mf/hkjc_capture.js
           cp mf-local-patch/local_unlock.js build-mf/local_unlock.js
           cp mf-local-patch/local_full.js build-mf/local_full.js
           cp mf-local-patch/local_popup_unlock.js build-mf/local_popup_unlock.js
@@ -63,7 +64,18 @@ jobs:
 
           m=Path("build-mf/manifest.json")
           d=json.loads(m.read_text("utf-8"))
+          if d.get("manifest_version") != 3:
+              raise SystemExit("Manifest V3 required for MAIN-world odds capture")
+          d["content_scripts"]=[cs for cs in d.get("content_scripts",[]) if "hkjc_capture.js" not in cs.get("js",[])]
+          d["content_scripts"].insert(0,{
+              "matches":["https://bet.hkjc.com/*","https://bet2.hkjc.com/*"],
+              "js":["hkjc_capture.js"],
+              "run_at":"document_start",
+              "world":"MAIN"
+          })
           for cs in d.get("content_scripts",[]):
+              if "hkjc_capture.js" in cs.get("js",[]):
+                  continue
               js=[x for x in cs.get("js",[]) if x not in ("local_unlock.js","local_full.js")]
               try:
                   i=js.index("init.js")
@@ -72,12 +84,13 @@ jobs:
               js.insert(i,"local_unlock.js")
               js.insert(i+1,"local_full.js")
               cs["js"]=js
-          d["version"]="9.3.3.7"
+          d["version"]="9.3.3.8"
           d["description"]="賽馬熱錢流聰明投注系統 - 本機計算版"
           m.write_text(json.dumps(d,ensure_ascii=False,indent=4)+"\n","utf-8")
           PY
 
           node --check build-mf/init.js
+          node --check build-mf/hkjc_capture.js
           node --check build-mf/local_unlock.js
           node --check build-mf/local_full.js
           node --check build-mf/local_popup_unlock.js
@@ -89,6 +102,7 @@ jobs:
             test "$(sha256sum "verify-orig/$f" | awk '{print $1}')" = "$(sha256sum "build-mf/$f" | awk '{print $1}')"
           done
           grep -q '_mfWaiters=new Map()' build-mf/init.js
+          grep -q 'hkjc_capture.js' build-mf/manifest.json
           grep -q "_0x4a06b5('LOCAL'" build-mf/init.js
           grep -q 'local_unlock.js' build-mf/manifest.json
           grep -q 'local_full.js' build-mf/manifest.json
