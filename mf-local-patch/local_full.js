@@ -57,8 +57,29 @@ function ensureSmartButton(){
 }
 function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&&e.id.match(/raceno_(\d+)/);if(m)return+m[1];m=location.pathname.match(/\/(\d+)(?:\/?$|\?)/);return m?+m[1]:1}
 function pool(){var e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];if(e&&e.getAttribute('rel'))return e.getAttribute('rel');var a=[['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp'],['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betDbl','dbl']];for(var i=0;i<a.length;i++){e=$q(a[i][0]);if(e&&e.classList.contains('mf007_btnOn'))return a[i][1]}return'q'}
-function selected(s){return $qa(s).filter(function(e){return e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60})}
-function bankers(){return $qa('.mf007_hno').filter(function(e){return e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(isFinite)}
+function runnerNo(e){
+  if(!e)return NaN;
+  var rel=String(e.getAttribute('rel')||'').trim();
+  if(/^\d{1,2}$/.test(rel)){var n=+rel;if(n>0&&n<60)return n;}
+  var m=String(e.id||'').match(/_(\d{1,2})$/);
+  if(m){var n2=+m[1];if(n2>0&&n2<60)return n2;}
+  var t=text(e);
+  if(/^\d{1,2}$/.test(t)){var n3=+t;if(n3>0&&n3<60)return n3;}
+  return NaN;
+}
+function selected(sel){
+  return $qa(sel).filter(function(e){return e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')}).map(runnerNo).filter(function(x){return isFinite(x)&&x>0&&x<60});
+}
+function bankers(){
+  return $qa('.mf007_hno').filter(function(e){return e.classList.contains('mf007_btnBanker')}).map(runnerNo).filter(function(x){return isFinite(x)&&x>0&&x<60});
+}
+function allRunnerNumbers(sel){
+  return Array.from(new Set($qa(sel).map(runnerNo).filter(function(x){return isFinite(x)&&x>0&&x<60}))).sort(function(a,b){return a-b});
+}
+function controlOn(id){
+  var e=$q(id);
+  return !!(e&&(e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')||e.getAttribute('aria-pressed')==='true'));
+}
 function horseNumbers(){
   var out=[];
   $qa('[id^="mf007_hno_"]').forEach(function(e){
@@ -160,7 +181,14 @@ function combos(p){
 
   if(p==='w'||p==='p')return uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).map(function(x){return{h:[x]}});
   if(p==='wp'){uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).forEach(function(x){o.push({h:[x],sub:'WIN'});o.push({h:[x],sub:'PLA'})});return o}
-  if(p==='dbl'){uniq(f.length?f:b.concat(l)).forEach(function(x){uniq(s2).forEach(function(y){o.push({h:[x,y]})})});return o}
+  if(p==='dbl'){
+    var leg1=uniq(f.length?f:b.concat(l));
+    var leg2=uniq(s2);
+    if(!leg1.length&&(controlOn('#mf007_hno_F')||controlOn('#mf007_hno_A')))leg1=allRunnerNumbers('.mf007_hno');
+    if(!leg2.length&&(controlOn('#mf007_hno2_F')||controlOn('#mf007_hno2_A')))leg2=allRunnerNumbers('.mf007_hno2');
+    leg1.forEach(function(x){leg2.forEach(function(y){o.push({h:[x,y]})})});
+    return o
+  }
   if(p==='fctb'||p==='fctbm'){
     if(b.length){b.forEach(function(x){l.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
     else{f=uniq(fieldOn()?all:f);f.forEach(function(x){f.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
@@ -349,20 +377,54 @@ function officialPairMap(poolCode,raceNo){
   });
   return map;
 }
+function orderedKeyFromComb(v){
+  var nums=String(v==null?'':v).match(/\d{1,2}/g);
+  if(!nums||nums.length<2)return'';
+  nums=nums.map(Number).filter(function(n){return n>0&&n<60});
+  if(nums.length<2)return'';
+  return nums[nums.length-2]+'-'+nums[nums.length-1];
+}
+function officialDblMap(raceNo){
+  var pools=officialPools(),src=[];
+  for(var i=0;i<pools.length;i++){
+    var p=pools[i]||{},typ=String(p.oddsType||'').toUpperCase(),races=p.leg&&Array.isArray(p.leg.races)?p.leg.races.map(Number):[];
+    if(typ!=='DBL'&&typ.indexOf('DBL')!==0)continue;
+    if(races.length&&races.indexOf(+raceNo)<0)continue;
+    src.push(p);
+  }
+  var map=new Map();
+  src.forEach(function(p){
+    (p.oddsNodes||[]).forEach(function(n){
+      if(!n)return;
+      var k=orderedKeyFromComb(n.combString),v=num(n.oddsValue);
+      if(k&&v>0)map.set(k,v);
+      var parent=oneRunner(n.combString);
+      (Array.isArray(n.bankerOdds)?n.bankerOdds:[]).forEach(function(b){
+        if(!b)return;
+        var bv=num(b.oddsValue);if(!(bv>0))return;
+        var bk=orderedKeyFromComb(b.combString);
+        if(!bk&&isFinite(parent)){
+          var other=oneRunner(b.combString);
+          if(isFinite(other))bk=parent+'-'+other;
+        }
+        if(bk)map.set(bk,bv);
+      });
+    });
+  });
+  return map;
+}
 function odds(p,r,cc){
   var officialMap=null;
   if(p==='q')officialMap=officialPairMap('QIN',r);
   else if(p==='qp')officialMap=officialPairMap('QPL',r);
+  else if(p==='dbl')officialMap=officialDblMap(r);
 
   return cc.map(function(c){
     var o=direct(p,r,c),key='';
-    if(c.h.length===2)key=Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]);
-    if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
-
-    if(!(o>1)&&p==='dbl'){
-      var x=direct('w',r,{h:[c.h[0]]}),y=direct('w',r+1,{h:[c.h[1]]});
-      if(x>1&&y>1)o=x*y;
+    if(c.h.length===2){
+      key=p==='dbl'?(c.h[0]+'-'+c.h[1]):(Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]));
     }
+    if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
     c.o=o;
     return c;
   });
@@ -373,32 +435,25 @@ function dutch(rows,b){
   var minTotal=rows.length*10;
   var cap=Math.floor((b*1.15)/10)*10;
   if(cap<minTotal)return{err:'總投注額不足；最低需要約 $'+minTotal};
-  var inv=rows.map(function(x){return 1/x.o});
-  var sum=inv.reduce(function(a,c){return a+c},0);
-  var ideal=inv.map(function(w){return b*w/sum});
-  var st=ideal.map(function(v){return Math.max(10,Math.round(v/10)*10)});
-  var used=st.reduce(function(a,c){return a+c},0);
-  while(used<b&&used+10<=cap){
-    var bi=0,bd=-1e9;
+
+  var st=rows.map(function(){return 10});
+  var used=minTotal;
+
+  while(used+10<=cap){
+    var bi=0,bp=Infinity;
     for(var i=0;i<rows.length;i++){
-      var d=ideal[i]-st[i];
-      if(d>bd){bd=d;bi=i}
+      var pay=st[i]*rows[i].o;
+      if(pay<bp){bp=pay;bi=i}
     }
-    st[bi]+=10;used+=10;
+    st[bi]+=10;
+    used+=10;
   }
-  while(used>cap){
-    var ri=-1,rd=-1e9;
-    for(var j=0;j<rows.length;j++){
-      if(st[j]<=10)continue;
-      var over=st[j]-ideal[j];
-      if(over>rd){rd=over;ri=j}
-    }
-    if(ri<0)break;
-    st[ri]-=10;used-=10;
-  }
+
   return{
     rows:rows.map(function(x,i){x.stake=st[i];x.pay=st[i]*x.o;return x}),
-    used:used,left:b-used,cap:cap
+    used:used,
+    left:b-used,
+    cap:cap
   };
 }
 function label(p){return{w:'獨贏',p:'位置',wp:'獨贏 + 位置',q:'連贏',qp:'位置Q',qqp:'連贏及位置Q',fctb:'單膽二重彩',fctbm:'複膽二重彩',dbl:'孖寶'}[p]||p}
