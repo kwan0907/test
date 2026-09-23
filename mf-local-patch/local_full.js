@@ -4,7 +4,55 @@ if(window.__MF007_LOCAL_FULL__)return;window.__MF007_LOCAL_FULL__=true;
 var $q=function(s,r){return(r||document).querySelector(s)},$qa=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
 var text=function(e){return((e&&e.textContent)||'').replace(/\s+/g,' ').trim()},num=function(v){v=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''));return isFinite(v)?v:NaN},iv=function(v){v=parseInt(String(v==null?'':v).replace(/\D/g,''),10);return isFinite(v)?v:NaN};
 if(window.jQuery&&jQuery.cors){var oldCors=jQuery.cors;jQuery.cors=function(url,data,err,ok){if(/moneyflow007\.com\/rsdata/i.test(String(url||''))){setTimeout(function(){if(err)err({local:true,status:0})},0);return this}return oldCors.apply(this,arguments)}}
-function hideLogin(){['#mf007_loginDiv','.mf007_memberSection','#mf007_member-btn','.mf007_member-btn','.mf007_logout-btn'].forEach(function(s){$qa(s).forEach(function(e){e.style.display='none'})});$qa('a,button').forEach(function(e){if(/^(登入|login)$/i.test(text(e))&&e.closest('[id^="mf007_"]'))e.style.display='none'})}
+function hideLogin(){['#mf007_loginDiv','#mf007_member-btn','.mf007_member-btn','.mf007_logout-btn'].forEach(function(s){$qa(s).forEach(function(e){e.style.display='none'})});$qa('a,button').forEach(function(e){if(/^(登入|login)$/i.test(text(e))&&e.closest('[id^="mf007_"]'))e.style.display='none'})}
+
+function ensureSmartButton(){
+  var candidates=$qa('button,a,input[type="button"],input[type="submit"],div,span').filter(function(e){
+    var t=(e.value||text(e)||'').replace(/\s+/g,'').trim();
+    return t==='聰明計算'||t.indexOf('聰明計算不能使用')>=0||t.indexOf('用戶尚未登入')>=0;
+  });
+  var chosen=null;
+  for(var i=0;i<candidates.length;i++){
+    var e=candidates[i];
+    if(e.closest('#mf007_loginDiv'))continue;
+    var t=(e.value||text(e)||'').replace(/\s+/g,'').trim();
+    if(t==='聰明計算'){chosen=e;break}
+    if(!chosen&&t.indexOf('聰明計算不能使用')>=0)chosen=e;
+  }
+  if(chosen){
+    if(chosen.tagName==='INPUT') chosen.value='聰明計算';
+    else chosen.textContent='聰明計算';
+    chosen.id='mf007_localSmartBtn';
+    chosen.style.display='';
+    chosen.style.visibility='visible';
+    chosen.style.opacity='1';
+    chosen.style.pointerEvents='auto';
+    chosen.style.cursor='pointer';
+    chosen.removeAttribute('disabled');
+    // If this was the original red "not logged in" notice, turn it back into a normal action control.
+    if((chosen.className||'').toString().indexOf('mf007_')<0){
+      chosen.style.border='1px solid #9b9b9b';
+      chosen.style.background='#fff';
+      chosen.style.color='#222';
+      chosen.style.padding='10px 14px';
+      chosen.style.textAlign='center';
+      chosen.style.fontWeight='600';
+      chosen.style.borderRadius='2px';
+    }
+  } else {
+    var host=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea');
+    if(host){
+      var b=document.createElement('button');
+      b.id='mf007_localSmartBtn';
+      b.type='button';
+      b.textContent='聰明計算';
+      b.style.cssText='width:100%;margin-top:8px;padding:10px 12px;border:1px solid #9b9b9b;background:#fff;color:#222;font-size:14px;font-weight:600;cursor:pointer';
+      host.appendChild(b);
+      chosen=b;
+    }
+  }
+  return chosen;
+}
 function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&&e.id.match(/raceno_(\d+)/);if(m)return+m[1];m=location.pathname.match(/\/(\d+)(?:\/?$|\?)/);return m?+m[1]:1}
 function pool(){var e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];if(e&&e.getAttribute('rel'))return e.getAttribute('rel');var a=[['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp'],['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betDbl','dbl']];for(var i=0;i<a.length;i++){e=$q(a[i][0]);if(e&&e.classList.contains('mf007_btnOn'))return a[i][1]}return'q'}
 function selected(s){return $qa(s).filter(function(e){return e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60})}
@@ -28,6 +76,6 @@ function addClass(p){return p==='q'?'mf007_calbetSubmit_qin':p==='qp'?'mf007_cal
 function rel(p,x){return p==='w'?x.h[0]+'|'+x.stake:x.h.length===2?x.h[0]+'|'+x.h[1]+'|'+x.stake:''}
 function show(p,b,c){var h=$q('#mf007_calbetResultDiv');if(!h){h=document.createElement('div');h.id='mf007_calbetResultDiv';var a=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea')||$q('[id^="mf007_"]');if(a)a.parentNode.insertBefore(h,a.nextSibling)}var rows=c.rows.map(function(x){return'<tr><td>'+x.h.join(' > ')+'</td><td>'+x.o.toFixed(2)+'</td><td>$'+x.stake+'</td><td>$'+x.pay.toFixed(0)+'</td></tr>'}).join(''),C=addClass(p),R=c.rows.map(function(x){return rel(p,x)}).filter(Boolean).join('@@'),avg=c.rows.reduce(function(s,x){return s+x.pay},0)/c.rows.length;h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：$'+b+'　實際：$'+c.used+(c.left?'　未分配：$'+c.left:'')+'　平均預計派彩：約 $'+avg.toFixed(0)+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';h.style.display='block'}
 function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\\n\\n請先選擇投注組合。');return}var last=+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000,raw=prompt('本機聰明計算（'+label(p)+'）\\n\\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\\n\\n目前頁面未能讀取 '+missing.length+' 個組合的即時賠率。\\n請確認馬會賠率矩陣已載入，再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
-document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
-new MutationObserver(hideLogin).observe(document.documentElement,{childList:true,subtree:true});hideLogin();
+document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet,#mf007_localSmartBtn');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
+var syncUI=function(){hideLogin();ensureSmartButton()};new MutationObserver(syncUI).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class']});syncUI();setInterval(syncUI,700);
 })();
