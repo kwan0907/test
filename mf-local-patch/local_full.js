@@ -179,6 +179,91 @@ function combos(p){
 }
 function direct(p,r,c){var a=c.h[0],b=c.h[1],codes=p==='q'?['QIN','Q']:p==='qp'?['QPL','QP']:p==='qqp'?['QQP']:(p==='fctb'||p==='fctbm')?['FCT','F']:p==='dbl'?['DBL']:p==='w'?['WIN']:p==='p'?['PLA']:c.sub?[c.sub]:[];for(var z=0;z<codes.length;z++){var code=codes[z],ids=b==null?['odds_'+code+'_'+r+'_'+a]:['odds_'+code+'_'+r+'_'+a+'_'+b,'odds_'+code+'_'+r+'_'+b+'_'+a,'odds_'+code+'_'+a+'_'+b,'odds_'+code+'_'+b+'_'+a];for(var k=0;k<ids.length;k++){var v=num(text(document.getElementById(ids[k])));if(v>0)return v}}return NaN}
 
+
+function cleanOddText(v){
+  v=String(v==null?'':v).replace(/\s+/g,'').trim();
+  if(!/^\d+(?:\.\d+)?$/.test(v))return NaN;
+  var n=+v;
+  return isFinite(n)&&n>=1&&n<10000?n:NaN;
+}
+function matrixCandidates(){
+  var n=horseNumbers().length||12,out=[];
+  $qa('table').forEach(function(t){
+    if(!t.getClientRects().length||t.closest('[id^="mf007_"]'))return;
+    var rows=$qa('tr',t),hdr=null,cols=[];
+    for(var ri=0;ri<Math.min(rows.length,8);ri++){
+      var cands=[];
+      $qa('td,th',rows[ri]).forEach(function(c){
+        var tt=text(c);
+        if(/^\d{1,2}$/.test(tt)){
+          var v=+tt,cr=c.getBoundingClientRect();
+          if(v>=2&&v<=Math.max(14,n))cands.push({v:v,x:(cr.left+cr.right)/2,w:Math.max(1,cr.width)});
+        }
+      });
+      cands.sort(function(a,b){return a.x-b.x});
+      var best=[],run=[];
+      for(var j=0;j<cands.length;j++){
+        if(!run.length||cands[j].v===run[run.length-1].v+1)run.push(cands[j]);
+        else run=cands[j].v===2?[cands[j]]:[];
+        if(run.length>best.length)best=run.slice();
+      }
+      if(best.length>=Math.min(7,Math.max(5,n-3))&&best[0].v===2){
+        hdr=rows[ri];cols=best;break;
+      }
+    }
+    if(!hdr)return;
+    var rect=t.getBoundingClientRect();
+    out.push({table:t,header:hdr,cols:cols,top:rect.top});
+  });
+  out.sort(function(a,b){return a.top-b.top});
+  return out;
+}
+function parseVisibleMatrix(entry){
+  var n=horseNumbers().length||12,map=new Map(),rows=$qa('tr',entry.table);
+  var hTop=entry.header.getBoundingClientRect().top,rowNo=1;
+  for(var ri=0;ri<rows.length&&rowNo<n;ri++){
+    var tr=rows[ri],rr=tr.getBoundingClientRect();
+    if(rr.top<=hTop+1||!tr.getClientRects().length)continue;
+    var cells=$qa('td,th',tr);
+    if(!cells.length)continue;
+
+    // Skip duplicate header rows.
+    var seq=0;
+    cells.forEach(function(c){var tt=text(c);if(/^\d{1,2}$/.test(tt)){var v=+tt;if(v>=2&&v<=n)seq++;}});
+    if(seq>=Math.min(7,Math.max(5,n-3)))continue;
+
+    var wrote=0;
+    entry.cols.forEach(function(col){
+      if(col.v<=rowNo||col.v>n)return;
+      var target=null,dist=1e9;
+      for(var ci=0;ci<cells.length;ci++){
+        var cr=cells[ci].getBoundingClientRect();
+        if(!cr.width)continue;
+        var d=Math.abs(((cr.left+cr.right)/2)-col.x);
+        if(d<dist){dist=d;target=cells[ci];}
+      }
+      if(!target)return;
+      var lim=Math.max(18,col.w*0.65);
+      if(dist>lim)return;
+      var ov=cleanOddText(text(target));
+      if(!(ov>0))return;
+      // Never treat the diagonal horse number as an odds value.
+      if(/^\d{1,2}$/.test(text(target))&&+text(target)===rowNo)return;
+      map.set(rowNo+'-'+col.v,ov);
+      wrote++;
+    });
+
+    if(wrote>0)rowNo++;
+  }
+  return map;
+}
+function visiblePairMap(poolCode){
+  var c=matrixCandidates();
+  if(!c.length)return new Map();
+  var ix=poolCode==='QPL'?1:0;
+  if(!c[ix])ix=0;
+  return parseVisibleMatrix(c[ix]);
+}
 function officialPools(){
   var el=document.getElementById('mf007_hkjc_official_odds_cache');
   if(!el)return[];
@@ -239,18 +324,19 @@ function officialPairMap(poolCode,raceNo){
   return map;
 }
 function odds(p,r,cc){
-  var pairMap=null;
-  if(p==='q')pairMap=officialPairMap('QIN',r);
-  else if(p==='qp')pairMap=officialPairMap('QPL',r);
+  var visibleMap=null,officialMap=null;
+  if(p==='q'){visibleMap=visiblePairMap('QIN');officialMap=officialPairMap('QIN',r);}
+  else if(p==='qp'){visibleMap=visiblePairMap('QPL');officialMap=officialPairMap('QPL',r);}
 
   return cc.map(function(c){
-    var o=NaN;
-    if(pairMap&&c.h.length===2){
-      var key=Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]);
-      o=pairMap.get(key);
-    }else{
-      o=direct(p,r,c);
-    }
+    var o=NaN,key='';
+    if(c.h.length===2)key=Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]);
+
+    // Exact on-screen HKJC value first, so the result matches what the user sees.
+    if(visibleMap&&key)o=visibleMap.get(key);
+    if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
+    if(!(o>1))o=direct(p,r,c);
+
     if(!(o>1)&&p==='dbl'){
       var x=direct('w',r,{h:[c.h[0]]}),y=direct('w',r+1,{h:[c.h[1]]});
       if(x>1&&y>1)o=x*y;
@@ -276,7 +362,7 @@ function currentPanelTotal(){
   }
   return NaN;
 }
-function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var panelTotal=currentPanelTotal(),last=isFinite(panelTotal)&&panelTotal>0?panelTotal:(+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000),raw=prompt('本機聰明計算（'+label(p)+'）\n\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能從馬會官方即時資料讀取 '+missing.length+' 個組合的賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
+function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var panelTotal=currentPanelTotal(),b=isFinite(panelTotal)&&panelTotal>0?Math.floor(panelTotal/10)*10:0;if(!(b>=10)){alert('====== 聰明投注訊息 ======\n\n請先在左邊選擇注碼。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能讀取 '+missing.length+' 個組合的即時賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
 document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet,#mf007_localSmartBtn');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
 var syncUI=function(){hideLogin();ensureSmartButton()};
 if(document.readyState==='loading'){
