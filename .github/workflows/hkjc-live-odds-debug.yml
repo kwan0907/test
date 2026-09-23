@@ -1,0 +1,24 @@
+name: HKJC Live Odds Debug
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-live-odds-debug.yml'
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch live HKJC QIN/QPL pool shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/q.json <<'JSON'
+          {
+            "query":"query racing($date: String, $venueCode: String, $oddsTypes: [OddsType], $raceNo: Int) { raceMeetings(date: $date, venueCode: $venueCode) { pmPools(oddsTypes: $oddsTypes, raceNo: $raceNo) { id status sellStatus oddsType lastUpdateTime leg { number races } oddsNodes { combString oddsValue bankerOdds { combString oddsValue } } } } }",
+            "variables":{"date":"2026-09-23","venueCode":"HV","oddsTypes":["QIN","QPL"],"raceNo":1}
+          }
+          JSON
+          curl -sS 'https://info.cld.hkjc.com/graphql/base/'             -H 'content-type: application/json'             -H 'origin: https://bet.hkjc.com'             -H 'referer: https://bet.hkjc.com/'             --data-binary @/tmp/q.json             | python -m json.tool
