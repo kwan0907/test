@@ -59,46 +59,92 @@ function race(){var e=$q('[id^="raceno_"].active,[id^="raceno_"].selected'),m=e&
 function pool(){var e=$qa('.mf007_tb.mf007_btnOn,.mf007_qtb.mf007_btnOn').filter(function(x){return x.getClientRects().length})[0];if(e&&e.getAttribute('rel'))return e.getAttribute('rel');var a=[['#mf007_betWin','w'],['#mf007_betPla','p'],['#mf007_betWP','wp'],['#mf007_betQin','q'],['#mf007_betQpl','qp'],['#mf007_betQQP','qqp'],['#mf007_betFctB','fctb'],['#mf007_betFctBM','fctbm'],['#mf007_betDbl','dbl']];for(var i=0;i<a.length;i++){e=$q(a[i][0]);if(e&&e.classList.contains('mf007_btnOn'))return a[i][1]}return'q'}
 function selected(s){return $qa(s).filter(function(e){return e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60})}
 function bankers(){return $qa('.mf007_hno').filter(function(e){return e.classList.contains('mf007_btnBanker')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(isFinite)}
-function fieldOn(){var e=$q('#mf007_hno_F');return !!(e&&e.classList.contains('mf007_btnOn'))}
-function visibleHorses(){return $qa('.mf007_hno').filter(function(e){return !e.hidden&&e.getClientRects().length>0&&!e.classList.contains('disabled')}).map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60})}
-function summary(){
-  var all=$qa('[id^="mf007_"]');
-  for(var i=0;i<all.length;i++){
-    var t=text(all[i]),m=t.match(/(?:^|\s)(\d{1,2})\s*>\s*F(?:\s|$)/i);
-    if(m){
-      var banker=+m[1],horses=$qa('.mf007_hno').map(function(e){return iv(e.getAttribute('rel')||e.id||text(e))}).filter(function(x){return isFinite(x)&&x>0&&x<60&&x!==banker});
-      if(!horses.length){
-        var panel=$q('#mf007_dataArea')||document;
-        horses=$qa('a,button,td,div',panel).map(function(e){var tt=text(e);return /^\d{1,2}$/.test(tt)?+tt:NaN}).filter(function(x){return isFinite(x)&&x>0&&x<60&&x!==banker});
-      }
-      horses=Array.from(new Set(horses)).sort(function(a,b){return a-b});
-      if(horses.length)return{b:[banker],l:horses};
-    }
-    m=t.match(/(?:^|\s)(\d{1,2})\s*>\s*((?:\d{1,2}[\s,]+){1,}\d{1,2})/);
-    if(m)return{b:[+m[1]],l:(m[2].match(/\d{1,2}/g)||[]).map(Number)};
+function horseNumbers(){
+  var out=[];
+  $qa('[id^="mf007_hno_"]').forEach(function(e){
+    var m=(e.id||'').match(/^mf007_hno_(\d{1,2})$/);
+    if(m){var n=+m[1];if(n>0&&n<60)out.push(n)}
+  });
+  if(!out.length){
+    $qa('.mf007_hno').forEach(function(e){
+      var n=iv(e.getAttribute('rel')||e.id||text(e));
+      if(isFinite(n)&&n>0&&n<60)out.push(n);
+    });
+  }
+  return Array.from(new Set(out)).sort(function(a,b){return a-b});
+}
+function fieldOn(){
+  var e=$q('#mf007_hno_F');
+  if(e&&(e.classList.contains('mf007_btnOn')||e.classList.contains('mf007_btnBOn')||e.getAttribute('aria-pressed')==='true'))return true;
+  var sp=selectionSpec();
+  return !!(sp&&sp.field);
+}
+function visibleHorses(){return horseNumbers()}
+function parseSelectionText(raw){
+  raw=String(raw||'').replace(/\u00a0/g,' ').replace(/[，,＋+]/g,' ').replace(/\s+/g,' ').trim();
+  var m=raw.match(/(?:^|\s)(\d{1,2})\s*>\s*(F)(?:\s|$)/i);
+  if(m){
+    var b=+m[1],all=horseNumbers().filter(function(x){return x!==b});
+    if(all.length)return{b:[b],l:all,field:true,raw:m[0].trim()};
+  }
+  m=raw.match(/(?:^|\s)(\d{1,2})\s*>\s*((?:\d{1,2}\s+){1,}\d{1,2})(?:\s|$)/);
+  if(m){
+    var banker=+m[1],legs=(m[2].match(/\d{1,2}/g)||[]).map(Number).filter(function(x){return x!==banker&&x>0&&x<60});
+    legs=Array.from(new Set(legs));
+    if(legs.length)return{b:[banker],l:legs,field:false,raw:m[0].trim()};
   }
   return null;
 }
+function selectionSpec(){
+  var nodes=$qa('input[id^="mf007_"],textarea[id^="mf007_"],[id^="mf007_"]');
+  for(var i=0;i<nodes.length;i++){
+    var e=nodes[i],v='';
+    if('value' in e&&e.value)v=e.value;
+    if(!v)v=text(e);
+    if(v&&v.length<=240){
+      var r=parseSelectionText(v);
+      if(r)return r;
+    }
+  }
+  // Final fallback: read the currently rendered page text once, only when
+  // Smart Calculation is clicked. This catches the original white summary box
+  // even if its element has no mf007 id.
+  var bodyText=(document.body&&document.body.innerText)||'';
+  return parseSelectionText(bodyText);
+}
+function summary(){return selectionSpec()}
 function uniq(a){return Array.from(new Set(a))}
 function combos(p){
-  var f=selected('.mf007_hno'),s2=selected('.mf007_hno2'),b=bankers(),o=[],all=visibleHorses(),l=f.filter(function(x){return b.indexOf(x)<0});
-  if(fieldOn()){
+  var f=selected('.mf007_hno'),s2=selected('.mf007_hno2'),b=bankers(),o=[],all=horseNumbers(),l=f.filter(function(x){return b.indexOf(x)<0}),spec=selectionSpec();
+
+  // The displayed original selection is authoritative. It is already what the
+  // user sees in the white box: "12 > F" or "12 > 1 2 ... 11".
+  if(spec){
+    b=spec.b.slice();
+    l=spec.l.slice();
+    f=uniq(b.concat(l));
+  }else if(fieldOn()){
     l=all.filter(function(x){return b.indexOf(x)<0});
     if(!b.length&&f.length)b=[f[0]];
-  }else{
-    var z=summary();
-    if((!b.length||!l.length)&&z){b=z.b;l=z.l}
   }
-  if(p==='w'||p==='p')return uniq(fieldOn()?all:(f.length?f:b.concat(l))).map(function(x){return{h:[x]}});
-  if(p==='wp'){uniq(fieldOn()?all:(f.length?f:b.concat(l))).forEach(function(x){o.push({h:[x],sub:'WIN'});o.push({h:[x],sub:'PLA'})});return o}
+
+  if(p==='w'||p==='p')return uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).map(function(x){return{h:[x]}});
+  if(p==='wp'){uniq(spec?b.concat(l):(fieldOn()?all:(f.length?f:b.concat(l)))).forEach(function(x){o.push({h:[x],sub:'WIN'});o.push({h:[x],sub:'PLA'})});return o}
   if(p==='dbl'){uniq(f.length?f:b.concat(l)).forEach(function(x){uniq(s2).forEach(function(y){o.push({h:[x,y]})})});return o}
   if(p==='fctb'||p==='fctbm'){
     if(b.length){b.forEach(function(x){l.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
     else{f=uniq(fieldOn()?all:f);f.forEach(function(x){f.forEach(function(y){if(x!==y)o.push({h:[x,y]})})})}
     return o
   }
-  if(b.length){b.forEach(function(x){l.forEach(function(y){if(x!==y)o.push({h:[Math.min(x,y),Math.max(x,y)]})})})}
-  else{f=uniq(fieldOn()?all:(f.length?f:l));for(var i=0;i<f.length;i++)for(var j=i+1;j<f.length;j++)o.push({h:[Math.min(f[i],f[j]),Math.max(f[i],f[j])]})}
+
+  // Q / QP banker-to-legs: one combination for each leg.
+  if(b.length&&l.length){
+    b.forEach(function(x){l.forEach(function(y){if(x!==y)o.push({h:[Math.min(x,y),Math.max(x,y)]})})})
+  }else{
+    f=uniq(fieldOn()?all:(f.length?f:l));
+    for(var i=0;i<f.length;i++)for(var j=i+1;j<f.length;j++)o.push({h:[Math.min(f[i],f[j]),Math.max(f[i],f[j])]})
+  }
+
   var seen={};return o.filter(function(c){var k=c.h.join('-');if(seen[k])return false;seen[k]=1;return true})
 }
 function direct(p,r,c){var a=c.h[0],b=c.h[1],codes=p==='q'?['QIN','Q']:p==='qp'?['QPL','QP']:p==='qqp'?['QQP']:(p==='fctb'||p==='fctbm')?['FCT','F']:p==='dbl'?['DBL']:p==='w'?['WIN']:p==='p'?['PLA']:c.sub?[c.sub]:[];for(var z=0;z<codes.length;z++){var code=codes[z],ids=b==null?['odds_'+code+'_'+r+'_'+a]:['odds_'+code+'_'+r+'_'+a+'_'+b,'odds_'+code+'_'+r+'_'+b+'_'+a,'odds_'+code+'_'+a+'_'+b,'odds_'+code+'_'+b+'_'+a];for(var k=0;k<ids.length;k++){var v=num(text(document.getElementById(ids[k])));if(v>0)return v}}return NaN}
