@@ -22,7 +22,9 @@ jobs:
           unzip -q "MF_QuickBet_9_3_3 (2).zip" -d verify-orig
           rm -rf build-mf/__MACOSX verify-orig/__MACOSX
 
+          cp mf-local-patch/local_unlock.js build-mf/local_unlock.js
           cp mf-local-patch/local_full.js build-mf/local_full.js
+          cp mf-local-patch/local_popup_unlock.js build-mf/local_popup_unlock.js
           cp mf-local-patch/local_popup.js build-mf/local_popup.js
 
           python - <<'PY'
@@ -41,10 +43,20 @@ jobs:
           if s.count(old)!=1:
               raise SystemExit(f"Expected exactly one isElementLoaded helper, found {s.count(old)}")
           s=s.replace(old,new,1)
+
+          # Start an entirely local session inside the original UI. The
+          # request itself is intercepted by local_unlock.js, so nothing is
+          # sent to MoneyFlow007 and no third-party account is created.
+          tail=";}});function _0xee1c(){"
+          if s.count(tail)!=1:
+              raise SystemExit(f"Expected one ready-function tail, found {s.count(tail)}")
+          s=s.replace(tail,";}setTimeout(function(){try{_0x4a06b5('LOCAL','','','1');}catch(_mfe){}},100);});function _0xee1c(){",1)
           ip.write_text(s,"utf-8")
 
           p=Path("build-mf/popup.html")
           s=p.read_text("utf-8")
+          if "local_popup_unlock.js" not in s:
+              s=s.replace('<script src="/popup.js"></script>', '<script src="local_popup_unlock.js"></script>\n    <script src="/popup.js"></script>')
           if "local_popup.js" not in s:
               s=s.replace("</body>", '<script src="local_popup.js"></script>\n</body>')
           p.write_text(s,"utf-8")
@@ -52,20 +64,23 @@ jobs:
           m=Path("build-mf/manifest.json")
           d=json.loads(m.read_text("utf-8"))
           for cs in d.get("content_scripts",[]):
-              js=[x for x in cs.get("js",[]) if x!="local_full.js"]
+              js=[x for x in cs.get("js",[]) if x not in ("local_unlock.js","local_full.js")]
               try:
                   i=js.index("init.js")
               except ValueError:
                   i=len(js)
-              js.insert(i,"local_full.js")
+              js.insert(i,"local_unlock.js")
+              js.insert(i+1,"local_full.js")
               cs["js"]=js
-          d["version"]="9.3.3.3"
+          d["version"]="9.3.3.4"
           d["description"]="賽馬熱錢流聰明投注系統 - 本機計算版"
           m.write_text(json.dumps(d,ensure_ascii=False,indent=4)+"\n","utf-8")
           PY
 
           node --check build-mf/init.js
+          node --check build-mf/local_unlock.js
           node --check build-mf/local_full.js
+          node --check build-mf/local_popup_unlock.js
           node --check build-mf/local_popup.js
 
           # Everything except the single wait-helper patch in init.js must
@@ -74,7 +89,10 @@ jobs:
             test "$(sha256sum "verify-orig/$f" | awk '{print $1}')" = "$(sha256sum "build-mf/$f" | awk '{print $1}')"
           done
           grep -q '_mfWaiters=new Map()' build-mf/init.js
+          grep -q "_0x4a06b5('LOCAL'" build-mf/init.js
+          grep -q 'local_unlock.js' build-mf/manifest.json
           grep -q 'local_full.js' build-mf/manifest.json
+          grep -q 'local_popup_unlock.js' build-mf/popup.html
           grep -q 'local_popup.js' build-mf/popup.html
 
           rm -f MF_QuickBet_9_3_3_STANDALONE.zip
@@ -87,5 +105,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MF_QuickBet_9_3_3_STANDALONE.zip
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Build MF standalone stable local calculator [skip ci]"
+          git commit -m "Build MF standalone full local feature mode [skip ci]"
           git push
