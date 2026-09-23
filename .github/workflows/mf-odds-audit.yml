@@ -1,0 +1,42 @@
+name: MF Odds Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mf-odds-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect odds selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf audit-mf
+          mkdir audit-mf
+          unzip -q "MF_QuickBet_9_3_3 (2).zip" -d audit-mf
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path("audit-mf/init.js").read_text("utf-8",errors="ignore")
+          # Print literal strings that look related to HKJC odds / WPQ page DOM.
+          lits=re.findall(r"['\"]([^'\"]{2,180})['\"]",s)
+          keys=("odds","qin","qpl","wpq","comb","table","pool","race","runner","win","pla","betType","oddsTable","quinella","forecast","investment")
+          out=[]
+          for x in lits:
+              lx=x.lower()
+              if any(k.lower() in lx for k in keys):
+                  if x not in out: out.append(x)
+          print("=== RELATED LITERALS ===")
+          for x in out:
+              print(x)
+          print("=== QUERYSELECTOR CONTEXTS ===")
+          for m in re.finditer(r"(?:querySelector|querySelectorAll|getElementById|\$\()[^;]{0,350}",s,re.I):
+              x=re.sub(r"\s+"," ",m.group(0))
+              lx=x.lower()
+              if any(k.lower() in lx for k in ("odds","qin","qpl","wpq","race","table")):
+                  print(x[:500])
+          PY
