@@ -178,36 +178,70 @@ function combos(p){
   var seen={};return o.filter(function(c){var k=c.h.join('-');if(seen[k])return false;seen[k]=1;return true})
 }
 function direct(p,r,c){var a=c.h[0],b=c.h[1],codes=p==='q'?['QIN','Q']:p==='qp'?['QPL','QP']:p==='qqp'?['QQP']:(p==='fctb'||p==='fctbm')?['FCT','F']:p==='dbl'?['DBL']:p==='w'?['WIN']:p==='p'?['PLA']:c.sub?[c.sub]:[];for(var z=0;z<codes.length;z++){var code=codes[z],ids=b==null?['odds_'+code+'_'+r+'_'+a]:['odds_'+code+'_'+r+'_'+a+'_'+b,'odds_'+code+'_'+r+'_'+b+'_'+a,'odds_'+code+'_'+a+'_'+b,'odds_'+code+'_'+b+'_'+a];for(var k=0;k<ids.length;k++){var v=num(text(document.getElementById(ids[k])));if(v>0)return v}}return NaN}
-function matrixTables(){return $qa('table').filter(function(t){if(t.closest('[id^="mf007_"]')||!t.getClientRects().length)return false;var n=$qa('td,th',t).map(function(c){return num(text(c))}).filter(function(x){return x>0}).length;return n>=30&&t.getBoundingClientRect().width>250}).sort(function(a,b){return a.getBoundingClientRect().top-b.getBoundingClientRect().top})}
-function parseMatrix(t){
-  var n=visibleHorses().length||12,map=new Map(),rows=$qa('tr',t),raceRow=0;
-  function vals(row){return $qa('td,th',row).map(function(c){return num(text(c))}).filter(function(v){return isFinite(v)&&v>0&&v<10000})}
-  function isHeader(a){
-    if(a.length<n-2)return false;
-    var seq=0;
-    for(var i=0;i<a.length;i++)if(Math.abs(a[i]-Math.round(a[i]))<1e-9&&a[i]>=2&&a[i]<=n)seq++;
-    return seq>=n-2&&a.slice(-Math.min(n-1,a.length)).every(function(v,i,arr){return i===0||v>=arr[i-1]})
-  }
-  for(var ri=0;ri<rows.length&&raceRow<n-1;ri++){
-    var a=vals(rows[ri]);if(!a.length||isHeader(a))continue;
-    var r=raceRow+1,need=n-r;
-    if(need<=0)break;
-    if(a.length<need)continue;
-    var oddsVals=a.slice(-need);
-    var plausible=oddsVals.filter(function(v){return v>=1&&v<10000}).length;
-    if(plausible<need)continue;
-    for(var j=0;j<oddsVals.length;j++)map.set(r+'-'+(r+1+j),oddsVals[j]);
-    raceRow++;
-  }
-  return map
+
+function officialPools(){
+  var el=document.getElementById('mf007_hkjc_official_odds_cache');
+  if(!el)return[];
+  try{var x=JSON.parse(el.textContent||'[]');return Array.isArray(x)?x:[]}catch(_e){return[]}
 }
-function odds(p,r,cc){var maps=matrixTables().map(parseMatrix).filter(function(m){return m.size>=3});return cc.map(function(c){var o=direct(p,r,c);if(!(o>1)&&c.h.length===2&&maps.length){var key=Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]),ix=p==='qp'?1:0;if(!maps[ix])ix=0;o=maps[ix]&&maps[ix].get(key)}if(!(o>1)&&p==='dbl'){var x=direct('w',r,{h:[c.h[0]]}),y=direct('w',r+1,{h:[c.h[1]]});if(x>1&&y>1)o=x*y}c.o=o;return c})}
+function pairKeyFromComb(v){
+  var nums=String(v==null?'':v).match(/\d{1,2}/g);
+  if(!nums||nums.length<2)return'';
+  nums=nums.map(Number).filter(function(n){return n>0&&n<60});
+  if(nums.length<2)return'';
+  var a=nums[nums.length-2],b=nums[nums.length-1];
+  if(a===b)return'';
+  return Math.min(a,b)+'-'+Math.max(a,b);
+}
+function officialPairMap(poolCode,raceNo){
+  var pools=officialPools(),exact=[],fallback=[];
+  for(var i=0;i<pools.length;i++){
+    var p=pools[i]||{},typ=String(p.oddsType||'').toUpperCase();
+    var rr=p.leg&&Array.isArray(p.leg.races)&&p.leg.races.length?+p.leg.races[0]:NaN;
+    if(isFinite(rr)&&rr!==+raceNo)continue;
+    if(typ===poolCode)exact.push(p);
+    else if(typ.indexOf(poolCode)===0)fallback.push(p);
+  }
+  var src=exact.length?exact:fallback,map=new Map();
+  src.forEach(function(p){
+    (p.oddsNodes||[]).forEach(function(n){
+      var k=pairKeyFromComb(n&&n.combString),v=num(n&&n.oddsValue);
+      if(k&&v>0)map.set(k,v);
+      (n&&Array.isArray(n.bankerOdds)?n.bankerOdds:[]).forEach(function(b){
+        var bk=pairKeyFromComb(b&&b.combString),bv=num(b&&b.oddsValue);
+        if(bk&&bv>0)map.set(bk,bv);
+      });
+    });
+  });
+  return map;
+}
+function odds(p,r,cc){
+  var pairMap=null;
+  if(p==='q')pairMap=officialPairMap('QIN',r);
+  else if(p==='qp')pairMap=officialPairMap('QPL',r);
+
+  return cc.map(function(c){
+    var o=NaN;
+    if(pairMap&&c.h.length===2){
+      var key=Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]);
+      o=pairMap.get(key);
+    }else{
+      o=direct(p,r,c);
+    }
+    if(!(o>1)&&p==='dbl'){
+      var x=direct('w',r,{h:[c.h[0]]}),y=direct('w',r+1,{h:[c.h[1]]});
+      if(x>1&&y>1)o=x*y;
+    }
+    c.o=o;
+    return c;
+  });
+}
 function dutch(rows,b){rows=rows.filter(function(x){return x.o>1});if(!rows.length)return null;if(b<rows.length*10)return{err:'總投注額至少需要 $'+rows.length*10};var inv=rows.map(function(x){return 1/x.o}),sum=inv.reduce(function(a,c){return a+c},0),st=inv.map(function(w){return Math.max(10,Math.floor((b*w/sum)/10)*10)}),used=st.reduce(function(a,c){return a+c},0);while(used+10<=b){var bi=0,bd=-1e9;for(var i=0;i<rows.length;i++){var d=b*inv[i]/sum-st[i];if(d>bd){bd=d;bi=i}}st[bi]+=10;used+=10}return{rows:rows.map(function(x,i){x.stake=st[i];x.pay=st[i]*x.o;return x}),used:used,left:b-used}}
 function label(p){return{w:'獨贏',p:'位置',wp:'獨贏 + 位置',q:'連贏',qp:'位置Q',qqp:'連贏及位置Q',fctb:'單膽二重彩',fctbm:'複膽二重彩',dbl:'孖寶'}[p]||p}
 function addClass(p){return p==='q'?'mf007_calbetSubmit_qin':p==='qp'?'mf007_calbetSubmit_qpl':(p==='fctb'||p==='fctbm')?'mf007_calbetSubmit_fct':p==='dbl'?'mf007_calbetSubmit_dbl':p==='w'?'mf007_calbetSubmit_win':''}
 function rel(p,x){return p==='w'?x.h[0]+'|'+x.stake:x.h.length===2?x.h[0]+'|'+x.h[1]+'|'+x.stake:''}
 function show(p,b,c){var h=$q('#mf007_calbetResultDiv');if(!h){h=document.createElement('div');h.id='mf007_calbetResultDiv';var a=$q('#mf007_calbetbtnDiv')||$q('#mf007_dataArea')||$q('[id^="mf007_"]');if(a)a.parentNode.insertBefore(h,a.nextSibling)}var rows=c.rows.map(function(x){return'<tr><td>'+x.h.join(' > ')+'</td><td>'+x.o.toFixed(2)+'</td><td>$'+x.stake+'</td><td>$'+x.pay.toFixed(0)+'</td></tr>'}).join(''),C=addClass(p),R=c.rows.map(function(x){return rel(p,x)}).filter(Boolean).join('@@'),avg=c.rows.reduce(function(s,x){return s+x.pay},0)/c.rows.length;h.innerHTML='<table class="mf007_betCaltbd" style="width:100%"><thead><tr><td colspan="4">'+label(p)+' 本機聰明計算</td></tr><tr><td>組合</td><td>賠率</td><td>總數</td><td>預計派彩*</td></tr></thead><tbody>'+rows+'</tbody></table><div style="padding:6px 0;font-size:12px">設定總投注：$'+b+'　實際：$'+c.used+(c.left?'　未分配：$'+c.left:'')+'　平均預計派彩：約 $'+avg.toFixed(0)+'</div>'+(C&&R?'<div style="padding:5px 0;text-align:center"><a href="javascript:void(0)" class="mf007_cbsubmit '+C+'" rel="'+R+'">加入'+label(p)+'組合</a></div>':'')+'<div style="font-size:10px;color:#666">本機 Dutching；實際派彩以馬會最後派彩為準。</div>';h.style.display='block'}
-function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var last=+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000,raw=prompt('本機聰明計算（'+label(p)+'）\n\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前頁面未能讀取 '+missing.length+' 個組合的即時賠率。\n請確認馬會賠率矩陣已載入，再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
+function run(){hideLogin();var p=pool(),r=race(),cc=combos(p);if(!cc.length){alert('====== 聰明投注訊息 ======\n\n請先選擇投注組合。');return}var last=+(localStorage.getItem('mf007_local_smart_budget')||1000)||1000,raw=prompt('本機聰明計算（'+label(p)+'）\n\n請輸入今次總投注額：',String(last));if(raw===null)return;var b=Math.floor(num(raw)/10)*10;if(!(b>=10)){alert('請輸入有效總投注額（$10 的倍數）。');return}localStorage.setItem('mf007_local_smart_budget',String(b));var pp=odds(p,r,cc),missing=pp.filter(function(x){return !(x.o>1)});if(missing.length){alert('====== 聰明投注訊息 ======\n\n目前未能從馬會官方即時資料讀取 '+missing.length+' 個組合的賠率。\n請按馬會頁面的更新賠率按鈕，等 1–2 秒再試一次。');return}var c=dutch(pp,b);if(c&&c.err){alert(c.err);return}if(c)show(p,b,c)}
 document.addEventListener('click',function(e){var x=e.target&&e.target.closest&&e.target.closest('#mf007_calbet,#mf007_SCcalbet,#mf007_localSmartBtn');if(!x)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();try{run()}catch(err){console.error(err);alert('本機聰明計算出現錯誤，請刷新頁面後再試。')}},true);
 var syncUI=function(){hideLogin();ensureSmartButton()};
 if(document.readyState==='loading'){
