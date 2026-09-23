@@ -1,0 +1,49 @@
+name: MF Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mf-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect original selectors and smart calc references
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf audit-mf
+          mkdir audit-mf
+          unzip -q "MF_QuickBet_9_3_3 (2).zip" -d audit-mf
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          for fn in ["init.js","mf007_styles.css","popup.html","popup.js"]:
+              p=Path("audit-mf")/fn
+              if not p.exists(): continue
+              s=p.read_text("utf-8",errors="ignore")
+              print("\n=== FILE",fn,"===")
+              pats=[
+                r"mf007_hno.{0,300}",
+                r"mf007_[A-Za-z0-9_]*(?:field|Field|all|All|full|Full|calbet|SCcalbet)[A-Za-z0-9_]*.{0,300}",
+                r"btnField.{0,300}",
+                r">\s*F.{0,300}",
+                r"odds_[A-Za-z0-9_]+.{0,300}",
+                r"qin.{0,300}",
+                r"qpl.{0,300}",
+              ]
+              seen=set()
+              for pat in pats:
+                  for m in re.finditer(pat,s,re.I|re.S):
+                      a=max(0,m.start()-250); b=min(len(s),m.end()+250)
+                      x=s[a:b].replace("\n"," ")
+                      x=re.sub(r"\s+"," ",x)
+                      if x in seen: continue
+                      seen.add(x)
+                      print("CTX:",x[:900])
+                      if len(seen)>=24: break
+                  if len(seen)>=24: break
+          PY
