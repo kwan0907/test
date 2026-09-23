@@ -29,6 +29,20 @@ jobs:
           import json
           from pathlib import Path
 
+          # Keep the original MF UI/core, but replace its unbounded
+          # requestAnimationFrame element waiter. In logged-out/local mode
+          # some selectors never appear; the original helper then polls the
+          # whole HKJC DOM every animation frame forever, and repeated startup
+          # calls can accumulate until Chrome reports the page as unresponsive.
+          ip=Path("build-mf/init.js")
+          s=ip.read_text("utf-8")
+          old="const isElementLoaded=async _0x152404=>{var _0x437631=_0x1f25;while(document[_0x437631(0x13b)](_0x152404)===null){await new Promise(_0x2f496a=>requestAnimationFrame(_0x2f496a));}return document[_0x437631(0x13b)](_0x152404);},delay="
+          new="const _mfWaiters=new Map(),_mfWaitTick=setInterval(()=>{_mfWaiters.forEach((_mfv,_mfs)=>{const _mfel=document.querySelector(_mfs);if(_mfel){_mfWaiters.delete(_mfs);_mfv.resolve(_mfel);}});},250),isElementLoaded=_0x152404=>{const _mfel=document.querySelector(_0x152404);if(_mfel)return Promise.resolve(_mfel);if(_mfWaiters.has(_0x152404))return _mfWaiters.get(_0x152404).promise;let _mfresolve;const _mfpromise=new Promise(_mfr=>{_mfresolve=_mfr;});_mfWaiters.set(_0x152404,{promise:_mfpromise,resolve:_mfresolve});return _mfpromise;},delay="
+          if s.count(old)!=1:
+              raise SystemExit(f"Expected exactly one isElementLoaded helper, found {s.count(old)}")
+          s=s.replace(old,new,1)
+          ip.write_text(s,"utf-8")
+
           p=Path("build-mf/popup.html")
           s=p.read_text("utf-8")
           if "local_popup.js" not in s:
@@ -45,18 +59,21 @@ jobs:
                   i=len(js)
               js.insert(i,"local_full.js")
               cs["js"]=js
-          d["version"]="9.3.3.2"
+          d["version"]="9.3.3.3"
           d["description"]="賽馬熱錢流聰明投注系統 - 本機計算版"
           m.write_text(json.dumps(d,ensure_ascii=False,indent=4)+"\n","utf-8")
           PY
 
+          node --check build-mf/init.js
           node --check build-mf/local_full.js
           node --check build-mf/local_popup.js
 
-          for f in init.js popup.js background.js cors.js jquery.js mf007_styles.css; do
+          # Everything except the single wait-helper patch in init.js must
+          # remain byte-for-byte identical to the original package.
+          for f in popup.js background.js cors.js jquery.js mf007_styles.css fontawesome.js; do
             test "$(sha256sum "verify-orig/$f" | awk '{print $1}')" = "$(sha256sum "build-mf/$f" | awk '{print $1}')"
           done
-
+          grep -q '_mfWaiters=new Map()' build-mf/init.js
           grep -q 'local_full.js' build-mf/manifest.json
           grep -q 'local_popup.js' build-mf/popup.html
 
@@ -70,5 +87,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MF_QuickBet_9_3_3_STANDALONE.zip
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Build MF standalone local smart calculator [skip ci]"
+          git commit -m "Build MF standalone stable local calculator [skip ci]"
           git push
