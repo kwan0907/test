@@ -71,6 +71,19 @@ function horseNumbers(){
       if(isFinite(n)&&n>0&&n<60)out.push(n);
     });
   }
+  if(!out.length){
+    $qa('tr').forEach(function(row){
+      var cells=$qa('td,th',row);
+      if(!cells.length)return;
+      var n=iv(text(cells[0]));
+      if(isFinite(n)&&n>0&&n<=24)out.push(n);
+    });
+  }
+  if(!out.length){
+    var body=text(document.body),m;
+    var re=/(?:^|\s)(\d{1,2})(?=\s)/g;
+    while((m=re.exec(body))){var n=+m[1];if(n>0&&n<=24)out.push(n)}
+  }
   return Array.from(new Set(out)).sort(function(a,b){return a-b});
 }
 function fieldOn(){
@@ -82,7 +95,7 @@ function fieldOn(){
 function visibleHorses(){return horseNumbers()}
 function parseSelectionText(raw){
   raw=String(raw||'').replace(/\u00a0/g,' ').replace(/[，,＋+]/g,' ').replace(/\s+/g,' ').trim();
-  var m=raw.match(/(?:^|\s)(\d{1,2})\s*>\s*(F)(?:\s|$)/i);
+  var m=raw.match(/(?:^|\s)(\d{1,2})\s*>\s*(F|全|全餐)(?:\s|$)/i);
   if(m){
     var b=+m[1],all=horseNumbers().filter(function(x){return x!==b});
     if(all.length)return{b:[b],l:all,field:true,raw:m[0].trim()};
@@ -106,7 +119,7 @@ function selectionSpec(){
     var bankers=bs.map(function(v){return iv(v)}).filter(function(x){return isFinite(x)&&x>0&&x<60});
     if(bankers.length&&ls.length){
       var b=bankers[0];
-      if(ls.some(function(v){return /^F$/i.test(v)})){
+      if(ls.some(function(v){return /^(?:F|全|全餐)$/i.test(v)})){
         var all=horseNumbers().filter(function(x){return x!==b});
         if(all.length)return{b:[b],l:all,field:true,raw:b+' > F'};
       }
