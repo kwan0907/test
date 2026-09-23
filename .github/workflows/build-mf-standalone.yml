@@ -7,6 +7,9 @@ on:
       - '.github/workflows/build-mf-standalone.yml'
 permissions:
   contents: write
+concurrency:
+  group: mf-standalone-main
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
