@@ -1,0 +1,32 @@
+name: HKJC Pool ID Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hkjc-pool-id-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect HKJC QPL/FCT DOM IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --compressed -A "Mozilla/5.0" -sS "https://bet.hkjc.com/static/js/main.0a8a63e2.js" -o /tmp/m.js
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path("/tmp/m.js").read_text("utf-8",errors="ignore")
+          for n in ["qb_QPL_","qb_QIN_","qb_FCT_","FCT","QPL"]:
+              print("\n====",n,"====")
+              pos=0;c=0
+              while True:
+                  i=s.find(n,pos)
+                  if i<0: break
+                  print(re.sub(r"\s+"," ",s[max(0,i-2500):min(len(s),i+4500)])[:7000])
+                  pos=i+len(n);c+=1
+                  if c>=12: break
+          PY
