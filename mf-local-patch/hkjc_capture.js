@@ -12,7 +12,7 @@ function writeCache(pools){
     pools.forEach(function(p){
       if(!p||!p.oddsType||!Array.isArray(p.oddsNodes))return;
       var typ=String(p.oddsType).toUpperCase();
-      if(!/^(QIN|QPL|QQP|WIN|PLA|DBL)/.test(typ))return;
+      if(!/^(QIN|QPL|QQP|WIN|PLA|DBL|FCT)/.test(typ))return;
       clean.push({
         oddsType:typ,
         leg:p.leg||null,
