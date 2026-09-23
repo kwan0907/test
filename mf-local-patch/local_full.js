@@ -588,14 +588,30 @@ function officialDblMap(raceNo){
   });
   return map;
 }
+function sanePairFallback(map,cc){
+  if(!map||!map.size)return null;
+  var vals=[],suspicious=0;
+  cc.forEach(function(c){
+    if(!c||c.h.length!==2)return;
+    var key=Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]);
+    var v=map.get(key);
+    if(!(v>1))return;
+    vals.push(v);
+    if(Number.isInteger(v)&&(v===c.h[0]||v===c.h[1]||(v>=1&&v<=20)))suspicious++;
+  });
+  if(!vals.length)return null;
+  // Header/runner numbers are the classic failure mode; reject rather than show wrong odds.
+  if(suspicious/vals.length>=0.45)return null;
+  return map;
+}
 function odds(p,r,cc){
   var officialMap=null,visibleMap=null,visibleFct=null;
   if(p==='q'){
-    visibleMap=visiblePairMap('QIN');
     officialMap=officialPairMap('QIN',r);
+    visibleMap=sanePairFallback(visiblePairMap('QIN'),cc);
   }else if(p==='qp'){
-    visibleMap=visiblePairMap('QPL');
     officialMap=officialPairMap('QPL',r);
+    visibleMap=sanePairFallback(visiblePairMap('QPL'),cc);
   }else if(p==='dbl'){
     officialMap=officialDblMap(r);
   }else if(p==='fctb'||p==='fctbm'){
@@ -608,22 +624,17 @@ function odds(p,r,cc){
     var key=c.h.length===2?(isOrdered?(c.h[0]+'-'+c.h[1]):(Math.min(c.h[0],c.h[1])+'-'+Math.max(c.h[0],c.h[1]))):'';
     var o=NaN;
 
-    if(p==='q'){
-      if(visibleMap&&key)o=visibleMap.get(key);
-      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
-      if(!(o>1))o=direct('q',r,c);
-    }else if(p==='qp'){
-      // Strict QPL isolation: never use QIN.
-      if(visibleMap&&key)o=visibleMap.get(key);
-      if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
-      // No generic Q fallback here. Missing QPL stays missing.
+    if(p==='q'||p==='qp'){
+      // Use the exact HKJC pool first: QIN for Q, QPL for Place Quinella.
+      if(officialMap&&key)o=officialMap.get(key);
+      if(!(o>1)&&visibleMap&&key)o=visibleMap.get(key);
+      // Never cross-fallback QIN <-> QPL.
     }else if(p==='dbl'){
       if(officialMap&&key)o=officialMap.get(key);
       if(!(o>1))o=direct('dbl',r,c);
     }else if(p==='fctb'||p==='fctbm'){
       if(visibleFct&&key)o=visibleFct.get(key);
       if(!(o>1)&&officialMap&&key)o=officialMap.get(key);
-      // FCT also stays isolated; never substitute Q/QPL.
     }else{
       o=direct(p,r,c);
     }
